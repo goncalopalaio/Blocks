@@ -1,4 +1,0 @@
-ninja: Entering directory `/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/arm64-v8a'
-[1/3] Building CXX object CMakeFiles/game.dir/game.cpp.o
-[2/3] Linking CXX shared library /Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/build/intermediates/cmake/debug/obj/arm64-v8a/libgame.so
-[3/3] Linking CXX shared library /Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/build/intermediates/cmake/debug/obj/arm64-v8a/libnative-activity.so

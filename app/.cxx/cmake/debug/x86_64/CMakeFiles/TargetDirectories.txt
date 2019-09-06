@@ -1,5 +1,0 @@
-/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/x86_64/CMakeFiles/native-activity.dir
-/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/x86_64/CMakeFiles/rebuild_cache.dir
-/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/x86_64/CMakeFiles/edit_cache.dir
-/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/x86_64/CMakeFiles/game.dir
-/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/x86_64/CMakeFiles/native_app_glue.dir

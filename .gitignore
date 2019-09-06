@@ -2,6 +2,8 @@
 # Created by https://www.gitignore.io/api/c,c++,android,androidstudio
 # Edit at https://www.gitignore.io/?templates=c,c++,android,androidstudio
 
+app/.cxx/cmake/
+
 ### Android ###
 # Built application files
 *.apk
@@ -270,7 +272,5 @@ fabric.properties
 ### AndroidStudio Patch ###
 
 !/gradle/wrapper/gradle-wrapper.jar
-
-app/.cxx/*
 
 # End of https://www.gitignore.io/api/c,c++,android,androidstudio

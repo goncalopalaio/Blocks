@@ -1,5 +1,0 @@
-/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/armeabi-v7a/CMakeFiles/native-activity.dir
-/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/armeabi-v7a/CMakeFiles/rebuild_cache.dir
-/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/armeabi-v7a/CMakeFiles/edit_cache.dir
-/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/armeabi-v7a/CMakeFiles/game.dir
-/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/armeabi-v7a/CMakeFiles/native_app_glue.dir
