@@ -1,0 +1,8 @@
+Executable : /Users/goncalopalaio/Library/Android/sdk/cmake/3.10.2.4988404/bin/ninja
+arguments : 
+-C
+/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/armeabi-v7a
+game
+native-activity
+jvmArgs : 
+

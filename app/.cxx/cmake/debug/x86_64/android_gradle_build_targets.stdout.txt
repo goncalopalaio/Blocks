@@ -1,0 +1,7 @@
+ninja: Entering directory `/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/x86_64'
+[1/6] Building C object CMakeFiles/native_app_glue.dir/Users/goncalopalaio/Library/Android/sdk/ndk-bundle/sources/android/native_app_glue/android_native_app_glue.c.o
+[2/6] Building CXX object CMakeFiles/game.dir/game.cpp.o
+[3/6] Linking C static library libnative_app_glue.a
+[4/6] Linking CXX shared library /Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/build/intermediates/cmake/debug/obj/x86_64/libgame.so
+[5/6] Building CXX object CMakeFiles/native-activity.dir/native-lib.cpp.o
+[6/6] Linking CXX shared library /Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/build/intermediates/cmake/debug/obj/x86_64/libnative-activity.so

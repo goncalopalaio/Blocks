@@ -1,0 +1,7 @@
+# ninja log v5
+1	127	1567724731	CMakeFiles/native_app_glue.dir/Users/goncalopalaio/Library/Android/sdk/ndk-bundle/sources/android/native_app_glue/android_native_app_glue.c.o	59e77ee18f969bc2
+1	162	1567724731	CMakeFiles/game.dir/game.cpp.o	8c60f6d44a79cdcf
+128	177	1567724731	libnative_app_glue.a	460f7aec9e7bdbd
+162	215	1567724731	/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/build/intermediates/cmake/debug/obj/x86_64/libgame.so	3242d223f15a1229
+0	268	1567724731	CMakeFiles/native-activity.dir/native-lib.cpp.o	7f4018316e16f0ff
+268	334	1567724731	/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/build/intermediates/cmake/debug/obj/x86_64/libnative-activity.so	d0bafb52453939a0

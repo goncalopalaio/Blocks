@@ -1,0 +1,79 @@
+{
+  "stringTable": {
+    "0": "/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/x86",
+    "1": "--target=i686-none-linux-android19 --gcc-toolchain=/Users/goncalopalaio/Library/Android/sdk/ndk-bundle/toolchains/llvm/prebuilt/darwin-x86_64 --sysroot=/Users/goncalopalaio/Library/Android/sdk/ndk-bundle/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dnative_activity_EXPORTS -I/Users/goncalopalaio/Library/Android/sdk/ndk-bundle/sources/android/native_app_glue -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -mstackrealign -fno-addrsig -Wa,--noexecstack -Wformat -Werror=format-security -std=gnu++11 -Wall -Werror -O0 -fno-limit-debug-info -fPIC",
+    "2": "--target=i686-none-linux-android19 --gcc-toolchain=/Users/goncalopalaio/Library/Android/sdk/ndk-bundle/toolchains/llvm/prebuilt/darwin-x86_64 --sysroot=/Users/goncalopalaio/Library/Android/sdk/ndk-bundle/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dgame_EXPORTS -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -mstackrealign -fno-addrsig -Wa,--noexecstack -Wformat -Werror=format-security -std=gnu++11 -Wall -Werror -O0 -fno-limit-debug-info -fPIC",
+    "3": "--target=i686-none-linux-android19 --gcc-toolchain=/Users/goncalopalaio/Library/Android/sdk/ndk-bundle/toolchains/llvm/prebuilt/darwin-x86_64 --sysroot=/Users/goncalopalaio/Library/Android/sdk/ndk-bundle/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -mstackrealign -fno-addrsig -Wa,--noexecstack -Wformat -Werror=format-security -O0 -fno-limit-debug-info -fPIC"
+  },
+  "buildFiles": [
+    "/Users/goncalopalaio/Library/Android/sdk/ndk-bundle/build/cmake/android.toolchain.cmake",
+    "/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/src/main/cpp/CMakeLists.txt",
+    "/Users/goncalopalaio/Library/Android/sdk/ndk-bundle/build/cmake/platforms.cmake"
+  ],
+  "cleanCommands": [
+    "/Users/goncalopalaio/Library/Android/sdk/cmake/3.10.2.4988404/bin/ninja -C \"/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/x86\" clean"
+  ],
+  "buildTargetsCommand": "/Users/goncalopalaio/Library/Android/sdk/cmake/3.10.2.4988404/bin/ninja -C \"/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/x86\" {LIST_OF_TARGETS_TO_BUILD}",
+  "libraries": {
+    "native_app_glue-Debug-x86": {
+      "buildCommand": "/Users/goncalopalaio/Library/Android/sdk/cmake/3.10.2.4988404/bin/ninja -C \"/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/x86\" native_app_glue",
+      "buildType": "debug",
+      "toolchain": "2333899456",
+      "abi": "x86",
+      "artifactName": "native_app_glue",
+      "files": [
+        {
+          "src": "/Users/goncalopalaio/Library/Android/sdk/ndk-bundle/sources/android/native_app_glue/android_native_app_glue.c",
+          "flagsOrdinal": 3,
+          "workingDirectoryOrdinal": 0
+        }
+      ],
+      "headers": [],
+      "output": "/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/x86/libnative_app_glue.a"
+    },
+    "native-activity-Debug-x86": {
+      "buildCommand": "/Users/goncalopalaio/Library/Android/sdk/cmake/3.10.2.4988404/bin/ninja -C \"/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/x86\" native-activity",
+      "buildType": "debug",
+      "toolchain": "2333899456",
+      "abi": "x86",
+      "artifactName": "native-activity",
+      "files": [
+        {
+          "src": "/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/src/main/cpp/native-lib.cpp",
+          "flagsOrdinal": 1,
+          "workingDirectoryOrdinal": 0
+        }
+      ],
+      "headers": [],
+      "output": "/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/build/intermediates/cmake/debug/obj/x86/libnative-activity.so"
+    },
+    "game-Debug-x86": {
+      "buildCommand": "/Users/goncalopalaio/Library/Android/sdk/cmake/3.10.2.4988404/bin/ninja -C \"/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/.cxx/cmake/debug/x86\" game",
+      "buildType": "debug",
+      "toolchain": "2333899456",
+      "abi": "x86",
+      "artifactName": "game",
+      "files": [
+        {
+          "src": "/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/src/main/cpp/game.cpp",
+          "flagsOrdinal": 2,
+          "workingDirectoryOrdinal": 0
+        }
+      ],
+      "headers": [],
+      "output": "/Users/goncalopalaio/Documents/projectos-pessoais/Blocks/app/build/intermediates/cmake/debug/obj/x86/libgame.so"
+    }
+  },
+  "toolchains": {
+    "2333899456": {
+      "cCompilerExecutable": "/Users/goncalopalaio/Library/Android/sdk/ndk-bundle/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang",
+      "cppCompilerExecutable": "/Users/goncalopalaio/Library/Android/sdk/ndk-bundle/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++"
+    }
+  },
+  "cFileExtensions": [
+    "c"
+  ],
+  "cppFileExtensions": [
+    "cpp"
+  ]
+}
