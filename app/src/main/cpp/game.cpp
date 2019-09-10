@@ -12,13 +12,50 @@
 #include <cstdlib>
 #include <cmath>
 #include <cstring>
+
+#define M_MATH_IMPLEMENTATION
+
+#include "m_math.h"
+
 #include "game.h"
 
-// Example taken from https://github.com/googlesamples/android-ndk/blob/master/hello-gl2/app/src/main/cpp/gl_code.cpp
-
-#define  LOG_TAG    "libgl2jni"
+#define  LOG_TAG    "game_blocks"
 #define  LOGI(...)  __android_log_print(ANDROID_LOG_INFO,LOG_TAG,__VA_ARGS__)
 #define  LOGE(...)  __android_log_print(ANDROID_LOG_ERROR,LOG_TAG,__VA_ARGS__)
+
+typedef struct {
+    float3 position;
+    float3 direction;
+    float3 up;
+} Camera;
+
+auto vs_shader_source =
+        "attribute vec4 vPosition;\n"
+        "uniform mat4 model_matrix;\n"
+        "uniform mat4 view_matrix;\n"
+        "uniform mat4 projection_matrix;\n"
+        "void main() {\n"
+        "  gl_Position = projection_matrix * view_matrix * model_matrix * vPosition;\n"
+        "}\n";
+
+auto fs_shader_source =
+        "precision mediump float;\n"
+        "void main() {\n"
+        "  gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n"
+        "}\n";
+
+float3 ORIGIN = {0, 0, 0};
+float3 X_AXIS = {1, 0, 0};
+float3 Y_AXIS = {0, 1, 0};
+float3 Z_AXIS = {0, 0, 1};
+
+float view_matrix[] = M_MAT4_IDENTITY();
+float projection_matrix[] = M_MAT4_IDENTITY();
+float model_matrix[] = M_MAT4_IDENTITY();
+
+Camera camera;
+
+float delta = 0;
 
 static void print_gl_string(const char *name, GLenum s) {
     const char *v = (const char *) glGetString(s);
@@ -31,18 +68,6 @@ static void check_gl_error(const char *op) {
         LOGI("after %s() glError (0x%x)\n", op, error);
     }
 }
-
-auto vs_shader_source =
-        "attribute vec4 vPosition;\n"
-        "void main() {\n"
-        "  gl_Position = vPosition;\n"
-        "}\n";
-
-auto fs_shader_source =
-        "precision mediump float;\n"
-        "void main() {\n"
-        "  gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n"
-        "}\n";
 
 GLuint loadShader(GLenum shaderType, const char *pSource) {
     GLuint shader = glCreateShader(shaderType);
@@ -109,6 +134,16 @@ GLuint create_program(const char *pVertexSource, const char *pFragmentSource) {
 }
 
 /**
+ * M_MATH.H extras
+ */
+
+void set_float3(float3 *v, float x, float y, float z) {
+    v->x = x;
+    v->y = y;
+    v->z = z;
+}
+
+/**
  * Game
  */
 
@@ -137,6 +172,21 @@ State init_game(int w, int h) {
 
     state.grey = 0.9f;
 
+    float aspect = w / (float) h;
+    m_mat4_perspective(projection_matrix, 10.0, aspect, 0.1, 100.0);
+    m_mat4_identity(view_matrix);
+
+    set_float3(&camera.position, 5, 5, 5);
+    set_float3(&camera.direction, 0 - camera.position.x, 0 - camera.position.y,
+               0 - camera.position.z);
+    set_float3(&camera.up, 0, 1, 0);
+
+    LOGI("Camera position %f %f %f\n", camera.position.x, camera.position.y, camera.position.z);
+    LOGI("Camera direction %f %f %f\n", camera.direction.x, camera.direction.y, camera.direction.z);
+    LOGI("Camera up %f %f %f\n", camera.up.x, camera.up.y, camera.up.z);
+
+    m_mat4_lookat(view_matrix, &camera.position, &camera.direction, &camera.up);
+
     return state;
 }
 
@@ -148,13 +198,27 @@ void render_game(State *state) {
                                    -0.5f,
                                    0.5f,
                                    -0.5f};
+
+    // Update state
+    delta += 0.01f;
+    m_mat4_rotation_axis(model_matrix, &Z_AXIS, delta);
+
+
+    // Render
     glClearColor(state->grey, state->grey, state->grey, 1);
-    glClear(GL_COLOR_BUFFER_BIT);
-    check_gl_error("glClear");
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glUseProgram(state->main_shader_program);
     check_gl_error("glUseProgram_main_shader_program");
 
+    glUniformMatrix4fv(glGetUniformLocation(state->main_shader_program, "model_matrix"), 1,
+                       GL_FALSE,
+                       model_matrix);
+    glUniformMatrix4fv(glGetUniformLocation(state->main_shader_program, "view_matrix"), 1, GL_FALSE,
+                       view_matrix);
+    glUniformMatrix4fv(glGetUniformLocation(state->main_shader_program, "projection_matrix"), 1,
+                       GL_FALSE, projection_matrix);
 
     GLint position = glGetAttribLocation(state->main_shader_program, "vPosition");
     int elementsPerVertex = 2;
@@ -162,6 +226,5 @@ void render_game(State *state) {
     glVertexAttribPointer(position, elementsPerVertex, GL_FLOAT, GL_FALSE, 0, triangle_vertices);
     glDrawArrays(GL_TRIANGLES, 0, 3);
 
-    //glUseProgram(0);
-    //check_gl_error("glUseProgram_0");
+    glUseProgram(0);
 }
