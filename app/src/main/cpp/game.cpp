@@ -2,8 +2,7 @@
 // Created by Gonçalo Palaio on 2019-09-05.
 //
 
-#include <jni.h>
-#include <android/log.h>
+
 
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
@@ -13,15 +12,13 @@
 #include <cmath>
 #include <cstring>
 
+#include "gp_platform.h"
+
 #define M_MATH_IMPLEMENTATION
 
 #include "m_math.h"
 
 #include "game.h"
-
-#define  LOG_TAG    "game_blocks"
-#define  LOGI(...)  __android_log_print(ANDROID_LOG_INFO,LOG_TAG,__VA_ARGS__)
-#define  LOGE(...)  __android_log_print(ANDROID_LOG_ERROR,LOG_TAG,__VA_ARGS__)
 
 typedef struct {
     float3 position;
@@ -59,13 +56,15 @@ float delta = 0;
 
 static void print_gl_string(const char *name, GLenum s) {
     const char *v = (const char *) glGetString(s);
-    LOGI("GL %s = %s\n", name, v);
+    //logi("GL %s = %s\n", name, v);
+    logi(v);
 }
 
 static void check_gl_error(const char *op) {
     for (GLint error = glGetError(); error; error
                                                     = glGetError()) {
-        LOGI("after %s() glError (0x%x)\n", op, error);
+        // logi("after %s() glError (0x%x)\n", op, error);
+        logi("after () glError\n");
     }
 }
 
@@ -83,8 +82,8 @@ GLuint loadShader(GLenum shaderType, const char *pSource) {
                 char *buf = (char *) malloc(infoLen);
                 if (buf) {
                     glGetShaderInfoLog(shader, infoLen, nullptr, buf);
-                    LOGE("Could not compile shader %d:\n%s\n",
-                         shaderType, buf);
+                    // loge("Could not compile shader %d:\n%s\n", shaderType, buf);
+                    logi("Could not compile shader %d:\n%s\n");
                     free(buf);
                 }
                 glDeleteShader(shader);
@@ -122,7 +121,8 @@ GLuint create_program(const char *pVertexSource, const char *pFragmentSource) {
                 char *buf = (char *) malloc(bufLength);
                 if (buf) {
                     glGetProgramInfoLog(program, bufLength, NULL, buf);
-                    LOGE("Could not link program:\n%s\n", buf);
+                    // loge("Could not link program:\n%s\n", buf);
+                    logi("Could not link program:\n%s\n");
                     free(buf);
                 }
             }
@@ -147,30 +147,61 @@ void set_float3(float3 *v, float x, float y, float z) {
  * Game
  */
 
-State init_game(int w, int h) {
-    LOGI("init_game(%d, %d)", w, h);
+State init_state_game() {
+    logi("init_state_game");
+
+    struct State state;
+    memset(&state, 0, sizeof(state));
+
+    state.w = -1;
+    state.h = -1;
+    state.valid = false;
+
+    state.total_assets = 1;
+    state.assets = (Asset *) malloc(1 * sizeof(Asset));
+
+    const char *contents = read_entire_file("hello.txt", 'r');
+    logi("Printing file contents");
+    logi(contents);
+
+    return state;
+}
+
+void on_resources_loaded_game(Asset *assets, int total_assets) {
+    logi("on_resources_loaded_game");
+
+}
+
+void unload_resources_game(Asset *assets, int total_assets) {
+    logi("unload_resources_game");
+
+}
+
+
+void init_game(State *state, int w, int h) {
+    //logi("init_game(%d, %d)", w, h);
+    logi("init_game");
+
     print_gl_string("Version", GL_VERSION);
     print_gl_string("Vendor", GL_VENDOR);
     print_gl_string("Renderer", GL_RENDERER);
     print_gl_string("Extensions", GL_EXTENSIONS);
 
-    struct State state;
-    memset(&state, 0, sizeof(state));
-    state.valid = true;
-    state.w = w;
-    state.h = h;
+    state->valid = true;
+    state->w = w;
+    state->h = h;
 
-    state.main_shader_program = create_program(vs_shader_source, fs_shader_source);
-    if (!state.main_shader_program) {
-        state.valid = false;
-        LOGE("Could not create program");
-        return state;
+    state->main_shader_program = create_program(vs_shader_source, fs_shader_source);
+    if (!state->main_shader_program) {
+        state->valid = false;
+        logi("Could not create program");
+        return;
     }
 
     glViewport(0, 0, w, h);
     check_gl_error("glViewport");
 
-    state.grey = 0.9f;
+    state->grey = 0.9f;
 
     float aspect = w / (float) h;
     m_mat4_perspective(projection_matrix, 10.0, aspect, 0.1, 100.0);
@@ -181,13 +212,11 @@ State init_game(int w, int h) {
                0 - camera.position.z);
     set_float3(&camera.up, 0, 1, 0);
 
-    LOGI("Camera position %f %f %f\n", camera.position.x, camera.position.y, camera.position.z);
-    LOGI("Camera direction %f %f %f\n", camera.direction.x, camera.direction.y, camera.direction.z);
-    LOGI("Camera up %f %f %f\n", camera.up.x, camera.up.y, camera.up.z);
+    // logi("Camera position %f %f %f\n", camera.position.x, camera.position.y, camera.position.z);
+    // logi("Camera direction %f %f %f\n", camera.direction.x, camera.direction.y, camera.direction.z);
+    // logi("Camera up %f %f %f\n", camera.up.x, camera.up.y, camera.up.z);
 
     m_mat4_lookat(view_matrix, &camera.position, &camera.direction, &camera.up);
-
-    return state;
 }
 
 void render_game(State *state) {

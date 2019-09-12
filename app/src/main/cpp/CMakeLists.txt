@@ -29,7 +29,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11 -Wall -Werror")
 set(CMAKE_SHARED_LINKER_FLAGS
         "${CMAKE_SHARED_LINKER_FLAGS} -u ANativeActivity_onCreate")
 
-add_library(game SHARED game.cpp)
+add_library(game SHARED game.cpp gp_android.cpp)
 add_library(native-activity SHARED native-lib.cpp)
 
 

@@ -23,26 +23,20 @@
 #include <cstring>
 #include <jni.h>
 #include <errno.h>
-#include <cassert>
+
 
 #include <EGL/egl.h>
 #include <GLES/gl.h>
 
-#include <android/sensor.h>
 #include <android/log.h>
 #include <android_native_app_glue.h>
+#include <android/asset_manager.h>
 #include <unistd.h>
 
+// Specific implementations
+#include "gp_platform.h"
+#include "gp_android.h"
 #include "game.h"
-
-#define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO, "native-activity", __VA_ARGS__))
-#define LOGW(...) ((void)__android_log_print(ANDROID_LOG_WARN, "native-activity", __VA_ARGS__))
-//-------------------------------------------------------------------------
-// Preprocessor
-//-------------------------------------------------------------------------
-#define HELPER_CLASS_NAME \
-  "com/sample/helper/NDKHelper"  // Class name of helper function
-
 
 /******************************************************************
  * OpenGL context handler
@@ -229,7 +223,7 @@ bool GLContext::InitEGLSurface() {
     }
 
     if (!num_configs) {
-        LOGW("Unable to retrieve EGL config");
+        android_logi("Unable to retrieve EGL config");
         return false;
     }
 
@@ -247,7 +241,7 @@ bool GLContext::InitEGLContext() {
     context_ = eglCreateContext(display_, config_, NULL, context_attribs);
 
     if (eglMakeCurrent(display_, surface_, surface_, context_) == EGL_FALSE) {
-        LOGW("Unable to eglMakeCurrent");
+        android_logi("Unable to eglMakeCurrent");
         return false;
     }
 
@@ -311,18 +305,19 @@ EGLint GLContext::Resume(ANativeWindow *window) {
 
     if (screen_width_ != original_widhth || screen_height_ != original_height) {
         // Screen resized
-        LOGI("Screen resized");
+        android_logi("Screen resized");
     }
 
     if (eglMakeCurrent(display_, surface_, surface_, context_) == EGL_TRUE)
         return EGL_SUCCESS;
 
     EGLint err = eglGetError();
-    LOGW("Unable to eglMakeCurrent %d", err);
+    //android_logw("Unable to eglMakeCurrent %d", err);
+    android_logi("Unable to eglMakeCurrent %d");
 
     if (err == EGL_CONTEXT_LOST) {
         // Recreate context
-        LOGI("Re-creating egl context");
+        android_logi("Re-creating egl context");
         InitEGLContext();
     } else {
         // Recreate surface
@@ -351,6 +346,7 @@ bool GLContext::Invalidate() {
 
 struct android_app;
 
+// @TODO refactor Engine. This is a mess.
 class Engine {
     GLContext *gl_context_;
 
@@ -370,6 +366,7 @@ class Engine {
     void ShowUI();
 
 public:
+
     static void HandleCmd(struct android_app *app, int32_t cmd);
 
     static int32_t HandleInput(android_app *app, AInputEvent *event);
@@ -382,11 +379,11 @@ public:
 
     int InitDisplay(android_app *app, Engine *engine);
 
-    void LoadResources();
+    void LoadResources(AAssetManager *asset_manager, Asset *assets, int total_assets);
 
-    void UnloadResources();
+    void UnloadResources(Asset *assets, int total_assets);
 
-    void DrawFrame(Engine *engine);
+    void DrawFrame(Engine *engine, AAssetManager *asset_manager);
 
     void TermDisplay();
 
@@ -423,16 +420,15 @@ Engine::~Engine() {}
 /**
  * Load resources
  */
-void Engine::LoadResources() {
-    //renderer_.Init();
-    //renderer_.Bind(&tap_camera_);
+void Engine::LoadResources(AAssetManager *asset_manager, Asset *assets, int total_assets) {
+    on_resources_loaded_game(assets, total_assets);
 }
 
 /**
  * Unload resources
  */
-void Engine::UnloadResources() {
-    //renderer_.Unload();
+void Engine::UnloadResources(Asset *assets, int total_assets) {
+    unload_resources_game(assets, total_assets);
 }
 
 /**
@@ -441,23 +437,32 @@ void Engine::UnloadResources() {
 int Engine::InitDisplay(android_app *app, Engine *engine) {
     if (!initialized_resources_) {
         gl_context_->Init(app_->window);
-        LoadResources();
+        update_asset_manager(app->activity->assetManager);
+
+        LOGI("InitDisplay ASSET_MANAGER IS NULL? %d", app->activity->assetManager == NULL);
+        engine->game_state = init_state_game();
+
+        LoadResources(app->activity->assetManager, engine->game_state.assets,
+                      engine->game_state.total_assets);
+
         initialized_resources_ = true;
     } else if (app->window != gl_context_->GetANativeWindow()) {
         // Re-initialize ANativeWindow.
         // On some devices, ANativeWindow is re-created when the app is resumed
         assert(gl_context_->GetANativeWindow());
-        UnloadResources();
+        UnloadResources(engine->game_state.assets, engine->game_state.total_assets);
         gl_context_->Invalidate();
         app_ = app;
         gl_context_->Init(app->window);
-        LoadResources();
+        LoadResources(app->activity->assetManager, engine->game_state.assets,
+                      engine->game_state.total_assets);
         initialized_resources_ = true;
     } else {
         // initialize OpenGL ES and EGL
         if (EGL_SUCCESS == gl_context_->Resume(app_->window)) {
-            UnloadResources();
-            LoadResources();
+            UnloadResources(engine->game_state.assets, engine->game_state.total_assets);
+            LoadResources(app->activity->assetManager, engine->game_state.assets,
+                          engine->game_state.total_assets);
         } else {
             assert(0);
         }
@@ -470,23 +475,14 @@ int Engine::InitDisplay(android_app *app, Engine *engine) {
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
 
-    // Note that screen size might have been changed
-    glViewport(0, 0, gl_context_->GetScreenWidth(),
-               gl_context_->GetScreenHeight());
-    //renderer_.UpdateViewport();
-
-    engine->game_state = init_game(gl_context_->GetScreenWidth(), gl_context_->GetScreenHeight());
-
-    //tap_camera_.SetFlip(1.f, -1.f, -1.f);
-    //tap_camera_.SetPinchTransformFactor(2.f, 2.f, 8.f);
-
+    init_game(&engine->game_state, gl_context_->GetScreenWidth(), gl_context_->GetScreenHeight());
     return 0;
 }
 
 /**
  * Just the current frame in the display.
  */
-void Engine::DrawFrame(Engine *pEngine) {
+void Engine::DrawFrame(Engine *engine, AAssetManager *asset_manager) {
 
     /*
      * float fps;
@@ -499,12 +495,13 @@ void Engine::DrawFrame(Engine *pEngine) {
     glClearColor(0.5f, 0.5f, 0.5f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     //renderer_.Render();
-    render_game(&pEngine->game_state);
+    render_game(&engine->game_state);
 
     // Swap
     if (EGL_SUCCESS != gl_context_->Swap()) {
-        UnloadResources();
-        LoadResources();
+        UnloadResources(engine->game_state.assets, engine->game_state.total_assets);
+        update_asset_manager(asset_manager);
+        LoadResources(asset_manager, engine->game_state.assets, engine->game_state.total_assets);
     }
 }
 
@@ -514,7 +511,7 @@ void Engine::DrawFrame(Engine *pEngine) {
 void Engine::TermDisplay() { gl_context_->Suspend(); }
 
 void Engine::TrimMemory() {
-    LOGI("Trimming memory");
+    android_logi("Trimming memory");
     gl_context_->Invalidate();
 }
 
@@ -531,14 +528,18 @@ int32_t Engine::HandleInput(android_app *app, AInputEvent *event) {
  */
 void Engine::HandleCmd(struct android_app *app, int32_t cmd) {
     Engine *eng = (Engine *) app->userData;
+
+
     switch (cmd) {
         case APP_CMD_SAVE_STATE:
             break;
         case APP_CMD_INIT_WINDOW:
             // The window is being shown, get it ready.
             if (app->window != NULL) {
+                update_asset_manager(app->activity->assetManager);
+
                 eng->InitDisplay(app, eng);
-                eng->DrawFrame(eng);
+                eng->DrawFrame(eng, app->activity->assetManager);
             }
             break;
         case APP_CMD_TERM_WINDOW:
@@ -554,10 +555,11 @@ void Engine::HandleCmd(struct android_app *app, int32_t cmd) {
             eng->has_focus_ = true;
             break;
         case APP_CMD_LOST_FOCUS:
+            update_asset_manager(app->activity->assetManager);
             eng->SuspendSensors();
             // Also stop animating.
             eng->has_focus_ = false;
-            eng->DrawFrame(eng);
+            eng->DrawFrame(eng, app->activity->assetManager);
             break;
         case APP_CMD_LOW_MEMORY:
             // Free up GL resources
@@ -657,6 +659,7 @@ void Engine::UpdateFPS(float fFPS) {
 
 Engine g_engine;
 
+
 /**
  * This is the main entry point of a native application that is using
  * android_native_app_glue.  It runs in its own thread, with its own
@@ -673,9 +676,9 @@ void android_main(android_app *state) {
     state->onAppCmd = Engine::HandleCmd;
     state->onInputEvent = Engine::HandleInput;
 
-#ifdef USE_NDK_PROFILER
-    monstartup("libTeapotNativeActivity.so");
-#endif
+//#ifdef USE_NDK_PROFILER
+//    monstartup("libTeapotNativeActivity.so");
+//#endif
 
     // Prepare to monitor accelerometer
     g_engine.InitSensors();
@@ -707,7 +710,7 @@ void android_main(android_app *state) {
         if (g_engine.IsReady()) {
             // Drawing is throttled to the screen update rate, so there
             // is no need to do timing here.
-            g_engine.DrawFrame(&g_engine);
+            g_engine.DrawFrame(&g_engine, state->activity->assetManager);
         }
     }
 }
