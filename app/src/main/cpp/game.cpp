@@ -13,6 +13,7 @@
 #include <cstring>
 
 #include "gp_platform.h"
+#include "gp_model.h"
 
 #define M_MATH_IMPLEMENTATION
 
@@ -31,14 +32,17 @@ auto vs_shader_source =
         "uniform mat4 model_matrix;\n"
         "uniform mat4 view_matrix;\n"
         "uniform mat4 projection_matrix;\n"
+        "varying float depth;\n"
         "void main() {\n"
+        "  depth = vPosition.z;\n"
         "  gl_Position = projection_matrix * view_matrix * model_matrix * vPosition;\n"
         "}\n";
 
 auto fs_shader_source =
         "precision mediump float;\n"
+        "varying float depth;\n"
         "void main() {\n"
-        "  gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n"
+        "  gl_FragColor = vec4(1.0, depth * 2.0, 0.0, 1.0);\n"
         "}\n";
 
 float3 ORIGIN = {0, 0, 0};
@@ -49,6 +53,7 @@ float3 Z_AXIS = {0, 0, 1};
 float view_matrix[] = M_MAT4_IDENTITY();
 float projection_matrix[] = M_MAT4_IDENTITY();
 float model_matrix[] = M_MAT4_IDENTITY();
+SModelData cube_model;
 
 Camera camera;
 
@@ -160,10 +165,6 @@ State init_state_game() {
     state.total_assets = 1;
     state.assets = (Asset *) malloc(1 * sizeof(Asset));
 
-    const char *contents = read_entire_file("hello.txt", 'r');
-    logi("Printing file contents");
-    logi(contents);
-
     return state;
 }
 
@@ -177,9 +178,7 @@ void unload_resources_game(Asset *assets, int total_assets) {
 
 }
 
-
 void init_game(State *state, int w, int h) {
-    //logi("init_game(%d, %d)", w, h);
     logi("init_game");
 
     print_gl_string("Version", GL_VERSION);
@@ -190,6 +189,20 @@ void init_game(State *state, int w, int h) {
     state->valid = true;
     state->w = w;
     state->h = h;
+
+    // Load models
+
+    char *cube = read_entire_file("cube.obj.smodel", 'r');
+    cube_model = parse_smodel_file(cube);
+
+    // @FIXME temporary logging, add support to log other params other than strings
+    logi("loaded cube model");
+    char* str_buf = (char*) malloc(sizeof(char) * 300);
+    sprintf(str_buf, "elements_per_vertex: %d vertex_number: %d size: %d has_data: %d", cube_model.elems_per_vertex, cube_model.vertex_number, cube_model.size, cube_model.data !=
+            nullptr);
+    logi(str_buf);
+
+
 
     state->main_shader_program = create_program(vs_shader_source, fs_shader_source);
     if (!state->main_shader_program) {
@@ -221,16 +234,16 @@ void init_game(State *state, int w, int h) {
 
 void render_game(State *state) {
     // TODO remove vertices from render loop
-    GLfloat triangle_vertices[] = {0.0f,
-                                   0.5f,
-                                   -0.5f,
-                                   -0.5f,
-                                   0.5f,
-                                   -0.5f};
+    GLfloat triangle_vertices[] = {1.0f,
+                                   1.5f,
+                                   -1.5f,
+                                   -1.5f,
+                                   1.5f,
+                                   -1.5f};
 
     // Update state
-    delta += 0.01f;
-    m_mat4_rotation_axis(model_matrix, &Z_AXIS, delta);
+    delta += 0.05f;
+    m_mat4_rotation_axis(model_matrix, &Z_AXIS, cos(delta) * 2.0);
 
 
     // Render
@@ -250,10 +263,20 @@ void render_game(State *state) {
                        GL_FALSE, projection_matrix);
 
     GLint position = glGetAttribLocation(state->main_shader_program, "vPosition");
-    int elementsPerVertex = 2;
-    glEnableVertexAttribArray(position);
-    glVertexAttribPointer(position, elementsPerVertex, GL_FLOAT, GL_FALSE, 0, triangle_vertices);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+
+    if (false) {
+        // Triangle
+        int elementsPerVertex = 2;
+        glEnableVertexAttribArray(position);
+        glVertexAttribPointer(position, elementsPerVertex, GL_FLOAT, GL_FALSE, 0, triangle_vertices);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+    } else {
+        int bytes_per_float = 4;
+        int stride = bytes_per_float * cube_model.elems_stride;
+        glEnableVertexAttribArray(position);
+        glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, cube_model.data);
+        glDrawArrays(GL_TRIANGLES, 0, cube_model.vertex_number);
+    }
 
     glUseProgram(0);
 }
