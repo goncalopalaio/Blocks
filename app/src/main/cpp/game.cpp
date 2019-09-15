@@ -32,9 +32,10 @@ auto vs_shader_source =
         "uniform mat4 model_matrix;\n"
         "uniform mat4 view_matrix;\n"
         "uniform mat4 projection_matrix;\n"
+        "uniform float roll;\n"
         "varying float depth;\n"
         "void main() {\n"
-        "  depth = vPosition.z;\n"
+        "  depth = roll + vPosition.z;\n"
         "  gl_Position = projection_matrix * view_matrix * model_matrix * vPosition;\n"
         "}\n";
 
@@ -58,6 +59,9 @@ SModelData cube_model;
 Camera camera;
 
 float delta = 0;
+float yaw = 0;
+float pitch = 0;
+float roll = 0;
 
 static void print_gl_string(const char *name, GLenum s) {
     const char *v = (const char *) glGetString(s);
@@ -220,7 +224,7 @@ void init_game(State *state, int w, int h) {
     m_mat4_perspective(projection_matrix, 10.0, aspect, 0.1, 100.0);
     m_mat4_identity(view_matrix);
 
-    set_float3(&camera.position, 5, 5, 5);
+    set_float3(&camera.position, 2.5, 3.5, 2.5);
     set_float3(&camera.direction, 0 - camera.position.x, 0 - camera.position.y,
                0 - camera.position.z);
     set_float3(&camera.up, 0, 1, 0);
@@ -232,20 +236,18 @@ void init_game(State *state, int w, int h) {
     m_mat4_lookat(view_matrix, &camera.position, &camera.direction, &camera.up);
 }
 
+void update_input_game(float in_yaw, float in_pitch, float in_roll) {
+    yaw = in_yaw / 10.0;
+    pitch = in_pitch / 10.0;
+    roll = in_roll / 10.0;
+}
+
 void render_game(State *state) {
     // TODO remove vertices from render loop
-    GLfloat triangle_vertices[] = {1.0f,
-                                   1.5f,
-                                   -1.5f,
-                                   -1.5f,
-                                   1.5f,
-                                   -1.5f};
 
+    delta += 0.005;
     // Update state
-    delta += 0.05f;
-    m_mat4_rotation_axis(model_matrix, &Z_AXIS, cos(delta) * 2.0);
-
-
+    m_mat4_rotation_axis(model_matrix, &Y_AXIS, cos(delta));
     // Render
     glClearColor(state->grey, state->grey, state->grey, 1);
 
@@ -254,6 +256,7 @@ void render_game(State *state) {
     glUseProgram(state->main_shader_program);
     check_gl_error("glUseProgram_main_shader_program");
 
+    glUniform1f(glGetUniformLocation(state->main_shader_program, "roll"), pitch);
     glUniformMatrix4fv(glGetUniformLocation(state->main_shader_program, "model_matrix"), 1,
                        GL_FALSE,
                        model_matrix);
@@ -266,6 +269,13 @@ void render_game(State *state) {
 
     if (false) {
         // Triangle
+        GLfloat triangle_vertices[] = {1.0f,
+                                       1.5f,
+                                       -1.5f,
+                                       -1.5f,
+                                       1.5f,
+                                       -1.5f};
+
         int elementsPerVertex = 2;
         glEnableVertexAttribArray(position);
         glVertexAttribPointer(position, elementsPerVertex, GL_FLOAT, GL_FALSE, 0, triangle_vertices);

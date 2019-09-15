@@ -32,12 +32,53 @@
 #include <android_native_app_glue.h>
 #include <android/asset_manager.h>
 #include <unistd.h>
+#include <android/sensor.h>
 
 // Specific implementations
 #include "gp_platform.h"
 #include "gp_android.h"
 #include "game.h"
 
+#include <dlfcn.h>
+ASensorManager* AcquireASensorManagerInstance(android_app* app) {
+
+    if(!app)
+        return nullptr;
+
+    typedef ASensorManager *(*PF_GETINSTANCEFORPACKAGE)(const char *name);
+    void* androidHandle = dlopen("libandroid.so", RTLD_NOW);
+    PF_GETINSTANCEFORPACKAGE getInstanceForPackageFunc = (PF_GETINSTANCEFORPACKAGE)
+            dlsym(androidHandle, "ASensorManager_getInstanceForPackage");
+    if (getInstanceForPackageFunc) {
+        JNIEnv* env = nullptr;
+        app->activity->vm->AttachCurrentThread(&env, NULL);
+
+        jclass android_content_Context = env->GetObjectClass(app->activity->clazz);
+        jmethodID midGetPackageName = env->GetMethodID(android_content_Context,
+                                                       "getPackageName",
+                                                       "()Ljava/lang/String;");
+        jstring packageName= (jstring)env->CallObjectMethod(app->activity->clazz,
+                                                            midGetPackageName);
+
+        const char *nativePackageName = env->GetStringUTFChars(packageName, 0);
+        ASensorManager* mgr = getInstanceForPackageFunc(nativePackageName);
+        env->ReleaseStringUTFChars(packageName, nativePackageName);
+        app->activity->vm->DetachCurrentThread();
+        if (mgr) {
+            dlclose(androidHandle);
+            return mgr;
+        }
+    }
+
+    typedef ASensorManager *(*PF_GETINSTANCE)();
+    PF_GETINSTANCE getInstanceFunc = (PF_GETINSTANCE)
+            dlsym(androidHandle, "ASensorManager_getInstance");
+    // by all means at this point, ASensorManager_getInstance should be available
+    assert(getInstanceFunc);
+    dlclose(androidHandle);
+
+    return getInstanceFunc();
+}
 /******************************************************************
  * OpenGL context handler
  * The class handles OpenGL and EGL context based on Android activity life cycle
@@ -357,9 +398,11 @@ class Engine {
 
     android_app *app_;
 
-    //ASensorManager* sensor_manager_;
-    //const ASensor* accelerometer_sensor_;
-    //ASensorEventQueue* sensor_event_queue_;
+    ASensorManager* sensor_manager_;
+    const ASensor* accelerometer_sensor_;
+    ASensorEventQueue* sensor_event_queue_;
+
+
 
     void UpdateFPS(float fFPS);
 
@@ -572,40 +615,42 @@ void Engine::HandleCmd(struct android_app *app, int32_t cmd) {
 // Sensor handlers
 //-------------------------------------------------------------------------
 void Engine::InitSensors() {
-    /*sensor_manager_ = AcquireASensorManagerInstance(app_);
+    sensor_manager_ = AcquireASensorManagerInstance(app_);
     accelerometer_sensor_ = ASensorManager_getDefaultSensor(
             sensor_manager_, ASENSOR_TYPE_ACCELEROMETER);
     sensor_event_queue_ = ASensorManager_createEventQueue(
-            sensor_manager_, app_->looper, LOOPER_ID_USER, NULL, NULL);*/
+            sensor_manager_, app_->looper, LOOPER_ID_USER, NULL, NULL);
 }
 
 void Engine::ProcessSensors(int32_t id) {
     // If a sensor has data, process it now.
     if (id == LOOPER_ID_USER) {
-        /*if (accelerometer_sensor_ != NULL) {
+        if (accelerometer_sensor_ != NULL) {
             ASensorEvent event;
             while (ASensorEventQueue_getEvents(sensor_event_queue_, &event, 1) > 0) {
+                LOGI("Sensor: %f", event.acceleration.roll);
+                update_input_game(event.acceleration.azimuth, event.acceleration.pitch, event.acceleration.roll);
             }
-        }*/
+        }
     }
 }
 
 void Engine::ResumeSensors() {
     // When our app gains focus, we start monitoring the accelerometer.
-    /*if (accelerometer_sensor_ != NULL) {
+    if (accelerometer_sensor_ != NULL) {
         ASensorEventQueue_enableSensor(sensor_event_queue_, accelerometer_sensor_);
         // We'd like to get 60 events per second (in us).
         ASensorEventQueue_setEventRate(sensor_event_queue_, accelerometer_sensor_,
                                        (1000L / 60) * 1000);
-    }*/
+    }
 }
 
 void Engine::SuspendSensors() {
     // When our app loses focus, we stop monitoring the accelerometer.
     // This is to avoid consuming battery while not being used.
-    /*if (accelerometer_sensor_ != NULL) {
+    if (accelerometer_sensor_ != NULL) {
         ASensorEventQueue_disableSensor(sensor_event_queue_, accelerometer_sensor_);
-    }*/
+    }
 }
 
 //-------------------------------------------------------------------------
