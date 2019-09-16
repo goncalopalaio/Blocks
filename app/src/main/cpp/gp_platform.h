@@ -8,7 +8,7 @@
 // @TODO remove define
 #define BUILD_ANDROID
 
-#define PLATFORM_LOGI(name) void name(const char* text)
+#define PLATFORM_LOGI_FMT(name) void name(const char* format, ...)
 #define PLATFORM_READ_ENTIRE_FILE(name) char* name(const char* file_name, char mode)
 
 #ifdef BUILD_ANDROID
@@ -17,7 +17,7 @@ PLATFORM_READ_ENTIRE_FILE(android_read_entire_file);
 
 #define read_entire_file android_read_entire_file
 
-PLATFORM_LOGI(android_logi);
+PLATFORM_LOGI_FMT(android_logi);
 
 #define logi android_logi
 #endif

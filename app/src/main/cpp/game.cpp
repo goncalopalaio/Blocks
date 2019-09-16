@@ -15,6 +15,10 @@
 #include "gp_platform.h"
 #include "gp_model.h"
 
+#define STB_TRUETYPE_IMPLEMENTATION
+
+#include "stb_truetype.h"
+
 #define M_MATH_IMPLEMENTATION
 
 #include "m_math.h"
@@ -28,22 +32,28 @@ typedef struct {
 } Camera;
 
 auto vs_shader_source =
-        "attribute vec4 vPosition;\n"
+        "attribute vec4 vertex_position;\n"
+        "attribute vec2 vertex_uvs;\n"
         "uniform mat4 model_matrix;\n"
         "uniform mat4 view_matrix;\n"
         "uniform mat4 projection_matrix;\n"
         "uniform float roll;\n"
         "varying float depth;\n"
+        "varying vec2 v_uvs;\n"
         "void main() {\n"
-        "  depth = roll + vPosition.z;\n"
-        "  gl_Position = projection_matrix * view_matrix * model_matrix * vPosition;\n"
+        "  v_uvs = vertex_uvs;"
+        "  depth = roll + vertex_position.z;\n"
+        "  gl_Position = projection_matrix * view_matrix * model_matrix * vertex_position;\n"
         "}\n";
 
 auto fs_shader_source =
         "precision mediump float;\n"
         "varying float depth;\n"
+        "uniform sampler2D texture_unit;"
+        "varying vec2 v_uvs;\n"
         "void main() {\n"
-        "  gl_FragColor = vec4(1.0, depth * 2.0, 0.0, 1.0);\n"
+        //"   gl_FragColor = vec4(1.0, depth * 2.0, 0.0, 1.0);"
+        "  gl_FragColor = vec4(1.0, depth * 0.5, 0.0, 1.0) + texture2D(texture_unit, v_uvs / 4.0);\n"
         "}\n";
 
 float3 ORIGIN = {0, 0, 0};
@@ -55,6 +65,9 @@ float view_matrix[] = M_MAT4_IDENTITY();
 float projection_matrix[] = M_MAT4_IDENTITY();
 float model_matrix[] = M_MAT4_IDENTITY();
 SModelData cube_model;
+
+stbtt_packedchar* font_char_info;
+GLuint font_texture = -1;
 
 Camera camera;
 
@@ -72,8 +85,13 @@ static void print_gl_string(const char *name, GLenum s) {
 static void check_gl_error(const char *op) {
     for (GLint error = glGetError(); error; error
                                                     = glGetError()) {
+        // TODO: create decent logging for formatted parameters
         // logi("after %s() glError (0x%x)\n", op, error);
-        logi("after () glError\n");
+        char* buf = (char*) malloc(500 * sizeof(char));
+        sprintf(buf, "after %s() glError (0x%x)", op, error);
+        logi(buf);
+
+        free(buf);
     }
 }
 
@@ -91,8 +109,8 @@ GLuint loadShader(GLenum shaderType, const char *pSource) {
                 char *buf = (char *) malloc(infoLen);
                 if (buf) {
                     glGetShaderInfoLog(shader, infoLen, nullptr, buf);
-                    // loge("Could not compile shader %d:\n%s\n", shaderType, buf);
-                    logi("Could not compile shader %d:\n%s\n");
+                    logi("Could not compile shader %d:\n%s\n", shaderType, buf);
+                    //logi("Could not compile shader %d:\n%s\n");
                     free(buf);
                 }
                 glDeleteShader(shader);
@@ -195,17 +213,69 @@ void init_game(State *state, int w, int h) {
     state->h = h;
 
     // Load models
-
     char *cube = read_entire_file("cube.obj.smodel", 'r');
     cube_model = parse_smodel_file(cube);
 
     // @FIXME temporary logging, add support to log other params other than strings
     logi("loaded cube model");
-    char* str_buf = (char*) malloc(sizeof(char) * 300);
-    sprintf(str_buf, "elements_per_vertex: %d vertex_number: %d size: %d has_data: %d", cube_model.elems_per_vertex, cube_model.vertex_number, cube_model.size, cube_model.data !=
+    char *str_buf = (char *) malloc(sizeof(char) * 300);
+    sprintf(str_buf, "elements_per_vertex: %d vertex_number: %d size: %d has_data: %d",
+            cube_model.elems_per_vertex, cube_model.vertex_number, cube_model.size,
+            cube_model.data !=
             nullptr);
     logi(str_buf);
 
+
+    // https://github.com/0xc0dec/demos/blob/master/src/stb-truetype/StbTrueType.cpp
+    {
+        const uint32_t font_size = 20;
+        const uint32_t font_atlas_width = 300;
+        const uint32_t font_atlas_height = 300;
+        const uint32_t font_oversample_x = 2;
+        const uint32_t font_oversample_y = 2;
+        const uint32_t font_first_char = ' ';
+        const uint32_t font_char_count = '~' - ' ';
+
+        auto *font_buffer = reinterpret_cast<unsigned char *>(read_entire_file("cmunrm.ttf",
+                                                                               'r'));
+        /* prepare font */
+        stbtt_fontinfo info;
+        if (!stbtt_InitFont(&info, font_buffer, 0)) {
+            logi("init font failed");
+        } else {
+            logi("font loaded");
+        }
+
+        auto* atlas_data = (uint8_t*) malloc(sizeof(uint8_t) * font_atlas_width * font_atlas_height);
+        font_char_info = (stbtt_packedchar*) malloc(sizeof(stbtt_packedchar) * font_char_count);
+
+        stbtt_pack_context context;
+        if (!stbtt_PackBegin(&context, atlas_data, font_atlas_width, font_atlas_height, 0, 1, nullptr)) {
+            logi("failed to pack begin font");
+            assert(0);
+            return;
+        }
+
+        stbtt_PackSetOversampling(&context, font_oversample_x, font_oversample_y);
+        if (!stbtt_PackFontRange(&context, font_buffer, 0, font_size, font_first_char, font_char_count, font_char_info)) {
+            logi("failed to pack font");
+            assert(0);
+            return;
+        }
+
+        stbtt_PackEnd(&context);
+
+        glGenTextures(1, &font_texture);
+        glBindTexture(GL_TEXTURE_2D, font_texture);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, font_atlas_width, font_atlas_height, 0, GL_RGB, GL_UNSIGNED_BYTE, atlas_data);
+        glHint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);
+        glGenerateMipmap(GL_TEXTURE_2D);
+
+        free(atlas_data);
+        free(font_char_info);
+        free(font_buffer);
+    }
 
 
     state->main_shader_program = create_program(vs_shader_source, fs_shader_source);
@@ -221,10 +291,10 @@ void init_game(State *state, int w, int h) {
     state->grey = 0.9f;
 
     float aspect = w / (float) h;
-    m_mat4_perspective(projection_matrix, 10.0, aspect, 0.1, 100.0);
+    m_mat4_perspective(projection_matrix, 13.0, aspect, 0.1, 100.0);
     m_mat4_identity(view_matrix);
 
-    set_float3(&camera.position, 2.5, 3.5, 2.5);
+    set_float3(&camera.position, 2.0, 3.0, 2.0);
     set_float3(&camera.direction, 0 - camera.position.x, 0 - camera.position.y,
                0 - camera.position.z);
     set_float3(&camera.up, 0, 1, 0);
@@ -257,6 +327,7 @@ void render_game(State *state) {
     check_gl_error("glUseProgram_main_shader_program");
 
     glUniform1f(glGetUniformLocation(state->main_shader_program, "roll"), pitch);
+    glUniform1f(glGetUniformLocation(state->main_shader_program, "texture_unit"), 0);
     glUniformMatrix4fv(glGetUniformLocation(state->main_shader_program, "model_matrix"), 1,
                        GL_FALSE,
                        model_matrix);
@@ -265,7 +336,9 @@ void render_game(State *state) {
     glUniformMatrix4fv(glGetUniformLocation(state->main_shader_program, "projection_matrix"), 1,
                        GL_FALSE, projection_matrix);
 
-    GLint position = glGetAttribLocation(state->main_shader_program, "vPosition");
+    GLint position = glGetAttribLocation(state->main_shader_program, "vertex_position");
+    GLint uvs = glGetAttribLocation(state->main_shader_program, "vertex_uvs");
+
 
     if (false) {
         // Triangle
@@ -278,13 +351,20 @@ void render_game(State *state) {
 
         int elementsPerVertex = 2;
         glEnableVertexAttribArray(position);
-        glVertexAttribPointer(position, elementsPerVertex, GL_FLOAT, GL_FALSE, 0, triangle_vertices);
+        glVertexAttribPointer(position, elementsPerVertex, GL_FLOAT, GL_FALSE, 0,
+                              triangle_vertices);
         glDrawArrays(GL_TRIANGLES, 0, 3);
     } else {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE, font_texture);
+
         int bytes_per_float = 4;
         int stride = bytes_per_float * cube_model.elems_stride;
         glEnableVertexAttribArray(position);
         glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, cube_model.data);
+        glEnableVertexAttribArray(uvs);
+        glVertexAttribPointer(uvs, 2, GL_FLOAT, GL_FALSE, stride, cube_model.data + 3);
+
         glDrawArrays(GL_TRIANGLES, 0, cube_model.vertex_number);
     }
 

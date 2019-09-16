@@ -445,9 +445,6 @@ public:
     void ResumeSensors();
 };
 
-//-------------------------------------------------------------------------
-// Ctor
-//-------------------------------------------------------------------------
 Engine::Engine()
         : initialized_resources_(false),
           has_focus_(false),
@@ -455,21 +452,12 @@ Engine::Engine()
     gl_context_ = GLContext::GetInstance();
 }
 
-//-------------------------------------------------------------------------
-// Dtor
-//-------------------------------------------------------------------------
 Engine::~Engine() {}
 
-/**
- * Load resources
- */
 void Engine::LoadResources(AAssetManager *asset_manager, Asset *assets, int total_assets) {
     on_resources_loaded_game(assets, total_assets);
 }
 
-/**
- * Unload resources
- */
 void Engine::UnloadResources(Asset *assets, int total_assets) {
     unload_resources_game(assets, total_assets);
 }
@@ -522,9 +510,6 @@ int Engine::InitDisplay(android_app *app, Engine *engine) {
     return 0;
 }
 
-/**
- * Just the current frame in the display.
- */
 void Engine::DrawFrame(Engine *engine, AAssetManager *asset_manager) {
 
     /*
@@ -611,9 +596,6 @@ void Engine::HandleCmd(struct android_app *app, int32_t cmd) {
     }
 }
 
-//-------------------------------------------------------------------------
-// Sensor handlers
-//-------------------------------------------------------------------------
 void Engine::InitSensors() {
     sensor_manager_ = AcquireASensorManagerInstance(app_);
     accelerometer_sensor_ = ASensorManager_getDefaultSensor(
@@ -628,7 +610,7 @@ void Engine::ProcessSensors(int32_t id) {
         if (accelerometer_sensor_ != NULL) {
             ASensorEvent event;
             while (ASensorEventQueue_getEvents(sensor_event_queue_, &event, 1) > 0) {
-                LOGI("Sensor: %f", event.acceleration.roll);
+                // LOGI("Sensor: %f", event.acceleration.roll);
                 update_input_game(event.acceleration.azimuth, event.acceleration.pitch, event.acceleration.roll);
             }
         }
@@ -653,9 +635,6 @@ void Engine::SuspendSensors() {
     }
 }
 
-//-------------------------------------------------------------------------
-// Misc
-//-------------------------------------------------------------------------
 void Engine::SetState(android_app *state) {
     app_ = state;
 /*    doubletap_detector_.SetConfiguration(app_->config);
@@ -668,13 +647,6 @@ bool Engine::IsReady() {
 
     return false;
 }
-
-/*void Engine::TransformPosition(Vec2& vec) {
-    vec = Vec2(2.0f, 2.0f) * vec /
-          Vec2(gl_context_->GetScreenWidth(),
-                           gl_context_->GetScreenHeight()) -
-          Vec2(1.f, 1.f);
-}*/
 
 void Engine::ShowUI() {
     /*JNIEnv* jni;

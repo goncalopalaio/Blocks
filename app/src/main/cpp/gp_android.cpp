@@ -10,8 +10,12 @@ void update_asset_manager(AAssetManager *m) {
     asset_manager = m;
 }
 
-void android_logi(const char *text) {
-    LOGI("%s", text);
+void android_logi(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    LOGI(fmt, args);
+    va_end(args);
+
 }
 
 char *android_read_entire_file(const char *file_name, char mode) {
