@@ -264,7 +264,7 @@ bool GLContext::InitEGLSurface() {
     }
 
     if (!num_configs) {
-        android_logi("Unable to retrieve EGL config");
+        android_log_str("Unable to retrieve EGL config");
         return false;
     }
 
@@ -282,7 +282,7 @@ bool GLContext::InitEGLContext() {
     context_ = eglCreateContext(display_, config_, NULL, context_attribs);
 
     if (eglMakeCurrent(display_, surface_, surface_, context_) == EGL_FALSE) {
-        android_logi("Unable to eglMakeCurrent");
+        android_log_str("Unable to eglMakeCurrent");
         return false;
     }
 
@@ -346,7 +346,7 @@ EGLint GLContext::Resume(ANativeWindow *window) {
 
     if (screen_width_ != original_widhth || screen_height_ != original_height) {
         // Screen resized
-        android_logi("Screen resized");
+        android_log_str("Screen resized");
     }
 
     if (eglMakeCurrent(display_, surface_, surface_, context_) == EGL_TRUE)
@@ -354,11 +354,11 @@ EGLint GLContext::Resume(ANativeWindow *window) {
 
     EGLint err = eglGetError();
     //android_logw("Unable to eglMakeCurrent %d", err);
-    android_logi("Unable to eglMakeCurrent %d");
+    android_log_str("Unable to eglMakeCurrent %d");
 
     if (err == EGL_CONTEXT_LOST) {
         // Recreate context
-        android_logi("Re-creating egl context");
+        android_log_str("Re-creating egl context");
         InitEGLContext();
     } else {
         // Recreate surface
@@ -511,7 +511,6 @@ int Engine::InitDisplay(android_app *app, Engine *engine) {
 }
 
 void Engine::DrawFrame(Engine *engine, AAssetManager *asset_manager) {
-
     /*
      * float fps;
      * if (monitor_.Update(fps)) {
@@ -539,7 +538,7 @@ void Engine::DrawFrame(Engine *engine, AAssetManager *asset_manager) {
 void Engine::TermDisplay() { gl_context_->Suspend(); }
 
 void Engine::TrimMemory() {
-    android_logi("Trimming memory");
+    android_log_str("Trimming memory");
     gl_context_->Invalidate();
 }
 

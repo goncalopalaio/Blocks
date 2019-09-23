@@ -25,6 +25,8 @@
 
 #include "game.h"
 
+#define SHADER_LOGGING_ON true
+
 typedef struct {
     float3 position;
     float3 direction;
@@ -56,6 +58,27 @@ auto fs_shader_source =
         "  gl_FragColor = vec4(1.0, depth * 0.5, 0.0, 1.0) + texture2D(texture_unit, v_uvs / 4.0);\n"
         "}\n";
 
+
+// Font
+stbtt_packedchar *font_char_info;
+GLuint font_texture = -1;
+
+const uint32_t font_size = 5;
+const uint32_t font_atlas_width = 300;
+const uint32_t font_atlas_height = 300;
+const uint32_t font_oversample_x = 1;
+const uint32_t font_oversample_y = 1;
+const uint32_t font_first_char = ' ';
+const uint32_t font_char_count = '~' - ' ';
+
+const int font_text_max_length = 50;
+const int font_elems_per_vertex = 3 + 2;
+const int font_elems_per_quad = 4 * font_elems_per_vertex;
+float *font_vertex_data;
+size_t font_vertex_data_size = sizeof(float) * font_text_max_length * font_elems_per_quad;
+
+// Scenery
+Camera camera;
 float3 ORIGIN = {0, 0, 0};
 float3 X_AXIS = {1, 0, 0};
 float3 Y_AXIS = {0, 1, 0};
@@ -66,11 +89,9 @@ float projection_matrix[] = M_MAT4_IDENTITY();
 float model_matrix[] = M_MAT4_IDENTITY();
 SModelData cube_model;
 
-stbtt_packedchar* font_char_info;
-GLuint font_texture = -1;
+bool is_first_frame = true;
 
-Camera camera;
-
+// Input
 float delta = 0;
 float yaw = 0;
 float pitch = 0;
@@ -78,43 +99,43 @@ float roll = 0;
 
 static void print_gl_string(const char *name, GLenum s) {
     const char *v = (const char *) glGetString(s);
-    //logi("GL %s = %s\n", name, v);
-    logi(v);
+    log_fmt("GL %s = %s\n", name, v);
 }
 
-static void check_gl_error(const char *op) {
-    for (GLint error = glGetError(); error; error
-                                                    = glGetError()) {
-        // TODO: create decent logging for formatted parameters
-        // logi("after %s() glError (0x%x)\n", op, error);
-        char* buf = (char*) malloc(500 * sizeof(char));
-        sprintf(buf, "after %s() glError (0x%x)", op, error);
-        logi(buf);
-
-        free(buf);
+void gl_error(const char *file, int line) {
+    bool has_errors = false;
+    log_fmt("GL_ERROR_START file:%s:%d", file, line);
+    for (GLint error = glGetError(); error; error = glGetError()) {
+        log_fmt("\tGlError (0x%x)\n", error);
+        has_errors = true;
     }
+    log_fmt("GL_ERROR_END");
+    assert(!has_errors);
 }
+#define GL_ERR gl_error(__FILE__, __LINE__)
 
 GLuint loadShader(GLenum shaderType, const char *pSource) {
     GLuint shader = glCreateShader(shaderType);
     if (shader) {
         glShaderSource(shader, 1, &pSource, nullptr);
         glCompileShader(shader);
+
         GLint compiled = 0;
         glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
         if (!compiled) {
             GLint infoLen = 0;
             glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infoLen);
+            log_fmt("compilation failed. info_len: %d", infoLen);
             if (infoLen) {
                 char *buf = (char *) malloc(infoLen);
                 if (buf) {
                     glGetShaderInfoLog(shader, infoLen, nullptr, buf);
-                    logi("Could not compile shader %d:\n%s\n", shaderType, buf);
-                    //logi("Could not compile shader %d:\n%s\n");
+                    log_fmt("could not compile shader %d:\n%s\n", shaderType, buf);
                     free(buf);
                 }
                 glDeleteShader(shader);
                 shader = 0;
+                assert(0);
             }
         }
     }
@@ -135,9 +156,9 @@ GLuint create_program(const char *pVertexSource, const char *pFragmentSource) {
     GLuint program = glCreateProgram();
     if (program) {
         glAttachShader(program, vertexShader);
-        check_gl_error("glAttachShader");
+        gl_error("game", __LINE__);
         glAttachShader(program, pixelShader);
-        check_gl_error("glAttachShader");
+        gl_error("game", __LINE__);
         glLinkProgram(program);
         GLint linkStatus = GL_FALSE;
         glGetProgramiv(program, GL_LINK_STATUS, &linkStatus);
@@ -149,7 +170,7 @@ GLuint create_program(const char *pVertexSource, const char *pFragmentSource) {
                 if (buf) {
                     glGetProgramInfoLog(program, bufLength, NULL, buf);
                     // loge("Could not link program:\n%s\n", buf);
-                    logi("Could not link program:\n%s\n");
+                    log_str("Could not link program:\n%s\n");
                     free(buf);
                 }
             }
@@ -171,11 +192,26 @@ void set_float3(float3 *v, float x, float y, float z) {
 }
 
 /**
+ * Arrays
+ */
+
+inline void set_vector3_arr(float *v, float x, float y, float z) {
+    *v = x;
+    *(v + 1) = y;
+    *(v + 2) = z;
+}
+
+inline void set_vector2_arr(float *v, float x, float y) {
+    *v = x;
+    *(v + 1) = y;
+}
+
+/**
  * Game
  */
 
 State init_state_game() {
-    logi("init_state_game");
+    log_str("init_state_game");
 
     struct State state;
     memset(&state, 0, sizeof(state));
@@ -191,17 +227,17 @@ State init_state_game() {
 }
 
 void on_resources_loaded_game(Asset *assets, int total_assets) {
-    logi("on_resources_loaded_game");
+    log_str("on_resources_loaded_game");
 
 }
 
 void unload_resources_game(Asset *assets, int total_assets) {
-    logi("unload_resources_game");
+    log_str("unload_resources_game");
 
 }
 
 void init_game(State *state, int w, int h) {
-    logi("init_game");
+    log_str("init_game");
 
     print_gl_string("Version", GL_VERSION);
     print_gl_string("Vendor", GL_VENDOR);
@@ -216,49 +252,39 @@ void init_game(State *state, int w, int h) {
     char *cube = read_entire_file("cube.obj.smodel", 'r');
     cube_model = parse_smodel_file(cube);
 
-    // @FIXME temporary logging, add support to log other params other than strings
-    logi("loaded cube model");
-    char *str_buf = (char *) malloc(sizeof(char) * 300);
-    sprintf(str_buf, "elements_per_vertex: %d vertex_number: %d size: %d has_data: %d",
+    log_fmt("elements_per_vertex: %d vertex_number: %d size: %d has_data: %d",
             cube_model.elems_per_vertex, cube_model.vertex_number, cube_model.size,
-            cube_model.data !=
-            nullptr);
-    logi(str_buf);
+            cube_model.data != nullptr);
 
 
     // https://github.com/0xc0dec/demos/blob/master/src/stb-truetype/StbTrueType.cpp
-    {
-        const uint32_t font_size = 20;
-        const uint32_t font_atlas_width = 300;
-        const uint32_t font_atlas_height = 300;
-        const uint32_t font_oversample_x = 2;
-        const uint32_t font_oversample_y = 2;
-        const uint32_t font_first_char = ' ';
-        const uint32_t font_char_count = '~' - ' ';
-
+    if (false) {
         auto *font_buffer = reinterpret_cast<unsigned char *>(read_entire_file("cmunrm.ttf",
                                                                                'r'));
         /* prepare font */
         stbtt_fontinfo info;
         if (!stbtt_InitFont(&info, font_buffer, 0)) {
-            logi("init font failed");
+            log_str("init font failed");
         } else {
-            logi("font loaded");
+            log_str("font loaded");
         }
 
-        auto* atlas_data = (uint8_t*) malloc(sizeof(uint8_t) * font_atlas_width * font_atlas_height);
-        font_char_info = (stbtt_packedchar*) malloc(sizeof(stbtt_packedchar) * font_char_count);
+        auto *atlas_data = (uint8_t *) malloc(
+                sizeof(uint8_t) * font_atlas_width * font_atlas_height);
+        font_char_info = (stbtt_packedchar *) malloc(sizeof(stbtt_packedchar) * font_char_count);
 
         stbtt_pack_context context;
-        if (!stbtt_PackBegin(&context, atlas_data, font_atlas_width, font_atlas_height, 0, 1, nullptr)) {
-            logi("failed to pack begin font");
+        if (!stbtt_PackBegin(&context, atlas_data, font_atlas_width, font_atlas_height, 0, 1,
+                             nullptr)) {
+            log_str("failed to pack begin font");
             assert(0);
             return;
         }
 
         stbtt_PackSetOversampling(&context, font_oversample_x, font_oversample_y);
-        if (!stbtt_PackFontRange(&context, font_buffer, 0, font_size, font_first_char, font_char_count, font_char_info)) {
-            logi("failed to pack font");
+        if (!stbtt_PackFontRange(&context, font_buffer, 0, font_size, font_first_char,
+                                 font_char_count, font_char_info)) {
+            log_str("failed to pack font");
             assert(0);
             return;
         }
@@ -268,7 +294,9 @@ void init_game(State *state, int w, int h) {
         glGenTextures(1, &font_texture);
         glBindTexture(GL_TEXTURE_2D, font_texture);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, font_atlas_width, font_atlas_height, 0, GL_RGB, GL_UNSIGNED_BYTE, atlas_data);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, font_atlas_width, font_atlas_height, 0, GL_RGB,
+                     GL_UNSIGNED_BYTE, atlas_data);
+        gl_error("game", __LINE__);
         glHint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);
         glGenerateMipmap(GL_TEXTURE_2D);
 
@@ -277,16 +305,20 @@ void init_game(State *state, int w, int h) {
         free(font_buffer);
     }
 
+    // Font loaded, allocate space to render quads
+
+    font_vertex_data = (float *) malloc(font_vertex_data_size);
+    memset(font_vertex_data, 0, font_vertex_data_size);
 
     state->main_shader_program = create_program(vs_shader_source, fs_shader_source);
     if (!state->main_shader_program) {
         state->valid = false;
-        logi("Could not create program");
+        log_str("Could not create program");
         return;
     }
+    gl_error("after create_program", __LINE__);
 
     glViewport(0, 0, w, h);
-    check_gl_error("glViewport");
 
     state->grey = 0.9f;
 
@@ -299,11 +331,15 @@ void init_game(State *state, int w, int h) {
                0 - camera.position.z);
     set_float3(&camera.up, 0, 1, 0);
 
-    // logi("Camera position %f %f %f\n", camera.position.x, camera.position.y, camera.position.z);
-    // logi("Camera direction %f %f %f\n", camera.direction.x, camera.direction.y, camera.direction.z);
-    // logi("Camera up %f %f %f\n", camera.up.x, camera.up.y, camera.up.z);
+    log_fmt("Camera position %f %f %f\n", camera.position.x, camera.position.y, camera.position.z);
+    log_fmt("Camera direction %f %f %f\n", camera.direction.x, camera.direction.y,
+            camera.direction.z);
+    log_fmt("Camera up %f %f %f\n", camera.up.x, camera.up.y, camera.up.z);
 
     m_mat4_lookat(view_matrix, &camera.position, &camera.direction, &camera.up);
+
+
+    gl_error("end init_game", __LINE__);
 }
 
 void update_input_game(float in_yaw, float in_pitch, float in_roll) {
@@ -312,19 +348,73 @@ void update_input_game(float in_yaw, float in_pitch, float in_roll) {
     roll = in_roll / 10.0;
 }
 
+void fill_glyph_info(const char *text, float *buffer, int font_max_length) {
+    // @TODO move allocations outside of render loop
+    size_t len = strlen(text);
+    assert(font_max_length > len);
+
+    // allocate space for 4 vertices with 2 uv coordinates
+
+    float offset_x = 0;
+    float offset_y = 0;
+
+    stbtt_aligned_quad quad;
+
+    int data_idx = 0;
+
+    for (int i = 0; i < len; i++) {
+        char character = text[i];
+        stbtt_GetPackedQuad(font_char_info,
+                            font_atlas_width,
+                            font_atlas_height,
+                            character - font_first_char,
+                            &offset_x,
+                            &offset_y,
+                            &quad,
+                            1);
+        auto xmin = quad.x0;
+        auto xmax = quad.x1;
+        auto ymin = -quad.y1;
+        auto ymax = -quad.y0;
+        log_fmt("xmin %f xmax %f ymin %f ymax %f", xmin, xmax, ymin, ymax);
+
+        set_vector3_arr(&buffer[data_idx], xmin, ymin, 0);
+        data_idx += 3;
+        set_vector2_arr(&buffer[data_idx], quad.s0, quad.t1);
+        data_idx += 2;
+
+        set_vector3_arr(&buffer[data_idx], xmin, ymax, 0);
+        data_idx += 3;
+        set_vector2_arr(&buffer[data_idx], quad.s0, quad.t0);
+        data_idx += 2;
+
+        set_vector3_arr(&buffer[data_idx], xmax, ymax, 0);
+        data_idx += 3;
+        set_vector2_arr(&buffer[data_idx], quad.s1, quad.t0);
+        data_idx += 2;
+
+        set_vector3_arr(&buffer[data_idx], xmax, ymin, 0);
+        data_idx += 3;
+        set_vector2_arr(&buffer[data_idx], quad.s1, quad.t1);
+        data_idx += 2;
+    }
+}
+
 void render_game(State *state) {
     // TODO remove vertices from render loop
+    GL_ERR;
 
-    delta += 0.005;
+    delta += 0.01;
     // Update state
-    m_mat4_rotation_axis(model_matrix, &Y_AXIS, cos(delta));
+    m_mat4_rotation_axis(model_matrix, &Z_AXIS, cos(delta));
     // Render
     glClearColor(state->grey, state->grey, state->grey, 1);
 
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    gl_error("game", __LINE__);
 
     glUseProgram(state->main_shader_program);
-    check_gl_error("glUseProgram_main_shader_program");
+    gl_error("game", __LINE__);
 
     glUniform1f(glGetUniformLocation(state->main_shader_program, "roll"), pitch);
     glUniform1f(glGetUniformLocation(state->main_shader_program, "texture_unit"), 0);
@@ -355,18 +445,54 @@ void render_game(State *state) {
                               triangle_vertices);
         glDrawArrays(GL_TRIANGLES, 0, 3);
     } else {
+
+        bool render_cube = false;
+        if (render_cube) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE, font_texture);
+
+            int bytes_per_float = 4;
+            int stride = bytes_per_float * cube_model.elems_stride;
+            glEnableVertexAttribArray(position);
+            glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, cube_model.data);
+            glEnableVertexAttribArray(uvs);
+            glVertexAttribPointer(uvs, 2, GL_FLOAT, GL_FALSE, stride, cube_model.data + 3);
+            glDrawArrays(GL_TRIANGLES, 0, cube_model.vertex_number);
+        }
+
+    }
+
+    {
+        is_first_frame = false;
+        size_t text_length = 0;
+        if (is_first_frame) {
+            is_first_frame = false;
+
+            const char *text = "Hell";
+            fill_glyph_info(text, font_vertex_data, font_text_max_length);
+
+            text_length = strlen(text);
+        }
+
+        // Render text in quads
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE, font_texture);
 
         int bytes_per_float = 4;
-        int stride = bytes_per_float * cube_model.elems_stride;
+        int stride = bytes_per_float * (3 + 2);
+        gl_error("Before vertex_arrays", __LINE__);
         glEnableVertexAttribArray(position);
-        glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, cube_model.data);
+        GL_ERR;
+        glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, font_vertex_data);
+        GL_ERR;
         glEnableVertexAttribArray(uvs);
-        glVertexAttribPointer(uvs, 2, GL_FLOAT, GL_FALSE, stride, cube_model.data + 3);
-
-        glDrawArrays(GL_TRIANGLES, 0, cube_model.vertex_number);
+        GL_ERR;
+        glVertexAttribPointer(uvs, 2, GL_FLOAT, GL_FALSE, stride, font_vertex_data + 3);
+        GL_ERR;
+        glDrawArrays(GL_TRIANGLES, 0, text_length * 6);
+        GL_ERR;
     }
+
 
     glUseProgram(0);
 }
