@@ -27,6 +27,9 @@
 
 #define SHADER_LOGGING_ON true
 
+#define RENDER_FONT false
+
+
 typedef struct {
     float3 position;
     float3 direction;
@@ -104,81 +107,102 @@ static void print_gl_string(const char *name, GLenum s) {
 
 void gl_error(const char *file, int line) {
     bool has_errors = false;
-    log_fmt("GL_ERROR_START file:%s:%d", file, line);
     for (GLint error = glGetError(); error; error = glGetError()) {
-        log_fmt("\tGlError (0x%x)\n", error);
+        log_fmt("\tGL_ERROR: file:%s:%d -- Hex: 0x%x Dec: %d)\n", file, line, error, error);
+        switch (error) {
+            case GL_INVALID_ENUM:
+                log_fmt("\tINVALID_ENUM");
+                break;
+            case GL_INVALID_VALUE:
+                log_fmt("\tINVALID_VALUE");
+                break;
+            case GL_INVALID_OPERATION:
+                log_fmt("\tINVALID_OPERATION");
+                break;
+            case GL_OUT_OF_MEMORY:
+                log_fmt("\tOUT_OF_MEMORY");
+                break;
+            case GL_INVALID_FRAMEBUFFER_OPERATION:
+                log_fmt("\tINVALID_FRAMEBUFFER_OPERATION");
+                break;
+            default:
+                log_fmt("\t__UNEXPECTED_VALUE__)");
+        }
         has_errors = true;
     }
-    log_fmt("GL_ERROR_END");
     assert(!has_errors);
 }
+
 #define GL_ERR gl_error(__FILE__, __LINE__)
 
-GLuint loadShader(GLenum shaderType, const char *pSource) {
-    GLuint shader = glCreateShader(shaderType);
-    if (shader) {
-        glShaderSource(shader, 1, &pSource, nullptr);
-        glCompileShader(shader);
+void log_shader_info_log(GLuint shader_obj_id) {
+    GLint log_length;
+    glGetShaderiv(shader_obj_id, GL_INFO_LOG_LENGTH, &log_length);
+    GLchar log_buffer[log_length];
+    glGetShaderInfoLog(shader_obj_id, log_length, NULL, log_buffer);
+    log_fmt("Log:\n %s\n", log_buffer);
+}
 
-        GLint compiled = 0;
-        glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
-        if (!compiled) {
-            GLint infoLen = 0;
-            glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infoLen);
-            log_fmt("compilation failed. info_len: %d", infoLen);
-            if (infoLen) {
-                char *buf = (char *) malloc(infoLen);
-                if (buf) {
-                    glGetShaderInfoLog(shader, infoLen, nullptr, buf);
-                    log_fmt("could not compile shader %d:\n%s\n", shaderType, buf);
-                    free(buf);
-                }
-                glDeleteShader(shader);
-                shader = 0;
-                assert(0);
-            }
-        }
+void log_program_info_log(GLuint program_obj_id) {
+    GLint log_length;
+    glGetProgramiv(program_obj_id, GL_INFO_LOG_LENGTH, &log_length);
+    GLchar log_buffer[log_length];
+    glGetProgramInfoLog(program_obj_id, log_length, NULL, log_buffer);
+
+    log_fmt("Log:\n %s\n", log_buffer);
+}
+
+GLuint compile_shader(GLenum shader_type, const char *source) {
+    assert(source != nullptr);
+    GLint compile_status = 0;
+
+    GLuint shader_obj_id = glCreateShader(shader_type);
+    assert(shader_obj_id != 0);
+
+    glShaderSource(shader_obj_id, 1, &source, nullptr);
+    glCompileShader(shader_obj_id);
+
+    glGetShaderiv(shader_obj_id, GL_COMPILE_STATUS, &compile_status);
+
+    if (SHADER_LOGGING_ON) {
+        log_fmt("result for shader compilation: %d\n", shader_type);
+        log_shader_info_log(shader_obj_id);
     }
-    return shader;
+
+    if (!compile_status) {
+        glDeleteShader(shader_obj_id);
+    }
+    assert(compile_status != 0);
+
+    return shader_obj_id;
 }
 
 GLuint create_program(const char *pVertexSource, const char *pFragmentSource) {
-    GLuint vertexShader = loadShader(GL_VERTEX_SHADER, pVertexSource);
-    if (!vertexShader) {
-        return 0;
+    GLuint vertexShader = compile_shader(GL_VERTEX_SHADER, pVertexSource);
+    GLuint pixelShader = compile_shader(GL_FRAGMENT_SHADER, pFragmentSource);
+
+    // link program
+    GLuint program_obj_id = glCreateProgram();
+    assert(program_obj_id != 0);
+
+    glAttachShader(program_obj_id, vertexShader);
+    glAttachShader(program_obj_id, pixelShader);
+    glLinkProgram(program_obj_id);
+
+    GLint link_status = GL_FALSE;
+    glGetProgramiv(program_obj_id, GL_LINK_STATUS, &link_status);
+
+    if (SHADER_LOGGING_ON) {
+        log_fmt("result for shader linking:\n");
+        log_program_info_log(program_obj_id);
     }
 
-    GLuint pixelShader = loadShader(GL_FRAGMENT_SHADER, pFragmentSource);
-    if (!pixelShader) {
-        return 0;
+    if (link_status != GL_TRUE) {
+        glDeleteProgram(program_obj_id);
     }
+    assert(link_status != 0);
 
-    GLuint program = glCreateProgram();
-    if (program) {
-        glAttachShader(program, vertexShader);
-        gl_error("game", __LINE__);
-        glAttachShader(program, pixelShader);
-        gl_error("game", __LINE__);
-        glLinkProgram(program);
-        GLint linkStatus = GL_FALSE;
-        glGetProgramiv(program, GL_LINK_STATUS, &linkStatus);
-        if (linkStatus != GL_TRUE) {
-            GLint bufLength = 0;
-            glGetProgramiv(program, GL_INFO_LOG_LENGTH, &bufLength);
-            if (bufLength) {
-                char *buf = (char *) malloc(bufLength);
-                if (buf) {
-                    glGetProgramInfoLog(program, bufLength, NULL, buf);
-                    // loge("Could not link program:\n%s\n", buf);
-                    log_str("Could not link program:\n%s\n");
-                    free(buf);
-                }
-            }
-            glDeleteProgram(program);
-            program = 0;
-        }
-    }
-    return program;
+    return program_obj_id;
 }
 
 /**
@@ -258,7 +282,7 @@ void init_game(State *state, int w, int h) {
 
 
     // https://github.com/0xc0dec/demos/blob/master/src/stb-truetype/StbTrueType.cpp
-    if (false) {
+    if (RENDER_FONT) {
         auto *font_buffer = reinterpret_cast<unsigned char *>(read_entire_file("cmunrm.ttf",
                                                                                'r'));
         /* prepare font */
@@ -462,7 +486,7 @@ void render_game(State *state) {
 
     }
 
-    {
+    if (RENDER_FONT) {
         is_first_frame = false;
         size_t text_length = 0;
         if (is_first_frame) {
