@@ -49,3 +49,36 @@ void android_log_files_in_folder(const char *text) {
     }
     AAssetDir_close(assetDir);
 }
+
+static int android_file_read(void* cookie, char* buf, int size) {
+    android_log_fmt("game_blocks: Calling android_file_read");
+    return AAsset_read((AAsset*)cookie, buf, size);
+}
+
+static int android_file_write(void* cookie, const char* buf, int size) {
+    return 0;
+}
+
+static fpos_t android_file_seek(void* cookie, fpos_t offset, int whence) {
+    return AAsset_seek((AAsset*)cookie, offset, whence);
+}
+
+static int android_file_close(void* cookie) {
+    AAsset_close((AAsset*)cookie);
+    return 0;
+}
+
+FILE* android_file_open(const char* fname, const char* mode)
+{
+    android_log_fmt("game_blocks: Calling android_file_open %s", fname);
+
+    if(mode[0] == 'w'){
+#undef  fopen
+        return fopen(fname,mode);
+    }
+#define fopen(name, mode) android_fopen(name, mode)
+    AAsset* asset = AAssetManager_open(asset_manager, fname, 0);
+    if(asset) return funopen(asset, android_file_read, android_file_write, android_file_seek, android_file_close);
+#undef  fopen
+    return fopen(fname,mode);
+}

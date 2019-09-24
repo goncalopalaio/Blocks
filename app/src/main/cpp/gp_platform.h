@@ -5,6 +5,8 @@
 #ifndef BLOCKS_GP_PLATFORM_H
 #define BLOCKS_GP_PLATFORM_H
 
+#include "stb_image.h"
+
 // @TODO remove define
 #define BUILD_ANDROID
 

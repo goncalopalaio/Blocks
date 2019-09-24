@@ -28,6 +28,7 @@
 #define SHADER_LOGGING_ON true
 
 #define RENDER_FONT false
+#define RENDER_CUBE true
 
 
 typedef struct {
@@ -57,48 +58,20 @@ auto fs_shader_source =
         "uniform sampler2D texture_unit;"
         "varying vec2 v_uvs;\n"
         "void main() {\n"
-        //"   gl_FragColor = vec4(1.0, depth * 2.0, 0.0, 1.0);"
-        "  gl_FragColor = vec4(1.0, depth * 0.5, 0.0, 1.0) + texture2D(texture_unit, v_uvs / 4.0);\n"
+        //"   gl_FragColor = vec4(v_uvs.y, v_uvs.x, 0.0, 1.0);"
+        "  gl_FragColor = texture2D(texture_unit, v_uvs);\n"
         "}\n";
 
-
-// Font
-stbtt_packedchar *font_char_info;
-GLuint font_texture = -1;
-
-const uint32_t font_size = 5;
-const uint32_t font_atlas_width = 300;
-const uint32_t font_atlas_height = 300;
-const uint32_t font_oversample_x = 1;
-const uint32_t font_oversample_y = 1;
-const uint32_t font_first_char = ' ';
-const uint32_t font_char_count = '~' - ' ';
-
-const int font_text_max_length = 50;
-const int font_elems_per_vertex = 3 + 2;
-const int font_elems_per_quad = 4 * font_elems_per_vertex;
-float *font_vertex_data;
-size_t font_vertex_data_size = sizeof(float) * font_text_max_length * font_elems_per_quad;
-
-// Scenery
+// Models
 Camera camera;
-float3 ORIGIN = {0, 0, 0};
-float3 X_AXIS = {1, 0, 0};
-float3 Y_AXIS = {0, 1, 0};
-float3 Z_AXIS = {0, 0, 1};
-
 float view_matrix[] = M_MAT4_IDENTITY();
 float projection_matrix[] = M_MAT4_IDENTITY();
 float model_matrix[] = M_MAT4_IDENTITY();
+
 SModelData cube_model;
 
-bool is_first_frame = true;
-
-// Input
-float delta = 0;
-float yaw = 0;
-float pitch = 0;
-float roll = 0;
+// Textures
+GLuint uvs_test_texture = -1;
 
 static void print_gl_string(const char *name, GLenum s) {
     const char *v = (const char *) glGetString(s);
@@ -257,7 +230,6 @@ void on_resources_loaded_game(Asset *assets, int total_assets) {
 
 void unload_resources_game(Asset *assets, int total_assets) {
     log_str("unload_resources_game");
-
 }
 
 void init_game(State *state, int w, int h) {
@@ -272,6 +244,13 @@ void init_game(State *state, int w, int h) {
     state->w = w;
     state->h = h;
 
+    // GL state
+    state->main_shader_program = create_program(vs_shader_source, fs_shader_source);
+    gl_error("after create_program", __LINE__);
+
+    glViewport(0, 0, w, h);
+    gl_error("after viewport", __LINE__);
+
     // Load models
     char *cube = read_entire_file("cube.obj.smodel", 'r');
     cube_model = parse_smodel_file(cube);
@@ -280,71 +259,7 @@ void init_game(State *state, int w, int h) {
             cube_model.elems_per_vertex, cube_model.vertex_number, cube_model.size,
             cube_model.data != nullptr);
 
-
-    // https://github.com/0xc0dec/demos/blob/master/src/stb-truetype/StbTrueType.cpp
-    if (RENDER_FONT) {
-        auto *font_buffer = reinterpret_cast<unsigned char *>(read_entire_file("cmunrm.ttf",
-                                                                               'r'));
-        /* prepare font */
-        stbtt_fontinfo info;
-        if (!stbtt_InitFont(&info, font_buffer, 0)) {
-            log_str("init font failed");
-        } else {
-            log_str("font loaded");
-        }
-
-        auto *atlas_data = (uint8_t *) malloc(
-                sizeof(uint8_t) * font_atlas_width * font_atlas_height);
-        font_char_info = (stbtt_packedchar *) malloc(sizeof(stbtt_packedchar) * font_char_count);
-
-        stbtt_pack_context context;
-        if (!stbtt_PackBegin(&context, atlas_data, font_atlas_width, font_atlas_height, 0, 1,
-                             nullptr)) {
-            log_str("failed to pack begin font");
-            assert(0);
-            return;
-        }
-
-        stbtt_PackSetOversampling(&context, font_oversample_x, font_oversample_y);
-        if (!stbtt_PackFontRange(&context, font_buffer, 0, font_size, font_first_char,
-                                 font_char_count, font_char_info)) {
-            log_str("failed to pack font");
-            assert(0);
-            return;
-        }
-
-        stbtt_PackEnd(&context);
-
-        glGenTextures(1, &font_texture);
-        glBindTexture(GL_TEXTURE_2D, font_texture);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, font_atlas_width, font_atlas_height, 0, GL_RGB,
-                     GL_UNSIGNED_BYTE, atlas_data);
-        gl_error("game", __LINE__);
-        glHint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);
-        glGenerateMipmap(GL_TEXTURE_2D);
-
-        free(atlas_data);
-        free(font_char_info);
-        free(font_buffer);
-    }
-
-    // Font loaded, allocate space to render quads
-
-    font_vertex_data = (float *) malloc(font_vertex_data_size);
-    memset(font_vertex_data, 0, font_vertex_data_size);
-
-    state->main_shader_program = create_program(vs_shader_source, fs_shader_source);
-    if (!state->main_shader_program) {
-        state->valid = false;
-        log_str("Could not create program");
-        return;
-    }
-    gl_error("after create_program", __LINE__);
-
-    glViewport(0, 0, w, h);
-
-    state->grey = 0.9f;
+    // Scenery positions
 
     float aspect = w / (float) h;
     m_mat4_perspective(projection_matrix, 13.0, aspect, 0.1, 100.0);
@@ -363,160 +278,83 @@ void init_game(State *state, int w, int h) {
     m_mat4_lookat(view_matrix, &camera.position, &camera.direction, &camera.up);
 
 
+    // Load images
+    log_fmt("Loading texture!\n");
+    int width, height, channels;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char *pixels = stbi_load("texture_map.png", &width, &height, &channels, 0);
+    assert(pixels != NULL);
+    log_fmt("Texture w: %d h: %d channels: %d is_null?: %d \n", width, height, channels, pixels == NULL);
+
+    //glEnable(GL_TEXTURE_2D);
+    glGenTextures(1, &uvs_test_texture);
+    glBindTexture(GL_TEXTURE_2D, uvs_test_texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    if (channels == 3) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+    } else {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    stbi_image_free(pixels);
+
     gl_error("end init_game", __LINE__);
 }
 
 void update_input_game(float in_yaw, float in_pitch, float in_roll) {
-    yaw = in_yaw / 10.0;
-    pitch = in_pitch / 10.0;
-    roll = in_roll / 10.0;
-}
-
-void fill_glyph_info(const char *text, float *buffer, int font_max_length) {
-    // @TODO move allocations outside of render loop
-    size_t len = strlen(text);
-    assert(font_max_length > len);
-
-    // allocate space for 4 vertices with 2 uv coordinates
-
-    float offset_x = 0;
-    float offset_y = 0;
-
-    stbtt_aligned_quad quad;
-
-    int data_idx = 0;
-
-    for (int i = 0; i < len; i++) {
-        char character = text[i];
-        stbtt_GetPackedQuad(font_char_info,
-                            font_atlas_width,
-                            font_atlas_height,
-                            character - font_first_char,
-                            &offset_x,
-                            &offset_y,
-                            &quad,
-                            1);
-        auto xmin = quad.x0;
-        auto xmax = quad.x1;
-        auto ymin = -quad.y1;
-        auto ymax = -quad.y0;
-        log_fmt("xmin %f xmax %f ymin %f ymax %f", xmin, xmax, ymin, ymax);
-
-        set_vector3_arr(&buffer[data_idx], xmin, ymin, 0);
-        data_idx += 3;
-        set_vector2_arr(&buffer[data_idx], quad.s0, quad.t1);
-        data_idx += 2;
-
-        set_vector3_arr(&buffer[data_idx], xmin, ymax, 0);
-        data_idx += 3;
-        set_vector2_arr(&buffer[data_idx], quad.s0, quad.t0);
-        data_idx += 2;
-
-        set_vector3_arr(&buffer[data_idx], xmax, ymax, 0);
-        data_idx += 3;
-        set_vector2_arr(&buffer[data_idx], quad.s1, quad.t0);
-        data_idx += 2;
-
-        set_vector3_arr(&buffer[data_idx], xmax, ymin, 0);
-        data_idx += 3;
-        set_vector2_arr(&buffer[data_idx], quad.s1, quad.t1);
-        data_idx += 2;
-    }
 }
 
 void render_game(State *state) {
-    // TODO remove vertices from render loop
+    GL_ERR;
+    // Render
+    glClearColor(0, 0, 1, 1);
+
+    glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     GL_ERR;
 
-    delta += 0.01;
-    // Update state
-    m_mat4_rotation_axis(model_matrix, &Z_AXIS, cos(delta));
-    // Render
-    glClearColor(state->grey, state->grey, state->grey, 1);
-
-    glClear(GL_DEPTH_BUFFER_BIT);
-    gl_error("game", __LINE__);
-
     glUseProgram(state->main_shader_program);
-    gl_error("game", __LINE__);
+    GL_ERR;
 
-    glUniform1f(glGetUniformLocation(state->main_shader_program, "roll"), pitch);
-    glUniform1f(glGetUniformLocation(state->main_shader_program, "texture_unit"), 0);
-    glUniformMatrix4fv(glGetUniformLocation(state->main_shader_program, "model_matrix"), 1,
-                       GL_FALSE,
-                       model_matrix);
-    glUniformMatrix4fv(glGetUniformLocation(state->main_shader_program, "view_matrix"), 1, GL_FALSE,
-                       view_matrix);
-    glUniformMatrix4fv(glGetUniformLocation(state->main_shader_program, "projection_matrix"), 1,
-                       GL_FALSE, projection_matrix);
+    if (RENDER_CUBE) {
 
-    GLint position = glGetAttribLocation(state->main_shader_program, "vertex_position");
-    GLint uvs = glGetAttribLocation(state->main_shader_program, "vertex_uvs");
-
-
-    if (false) {
-        // Triangle
-        GLfloat triangle_vertices[] = {1.0f,
-                                       1.5f,
-                                       -1.5f,
-                                       -1.5f,
-                                       1.5f,
-                                       -1.5f};
-
-        int elementsPerVertex = 2;
-        glEnableVertexAttribArray(position);
-        glVertexAttribPointer(position, elementsPerVertex, GL_FLOAT, GL_FALSE, 0,
-                              triangle_vertices);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-    } else {
-
-        bool render_cube = false;
-        if (render_cube) {
+        bool draw_texture = true;
+        if (draw_texture) {
             glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE, font_texture);
+            GL_ERR;
+            glBindTexture(GL_TEXTURE_2D, uvs_test_texture);
+            GL_ERR;
+            GLint texture_unit = glGetAttribLocation(state->main_shader_program, "texture_unit");
+            GL_ERR;
+            glUniform1f(texture_unit, 0.0);
+            GL_ERR;
+        }
 
-            int bytes_per_float = 4;
-            int stride = bytes_per_float * cube_model.elems_stride;
-            glEnableVertexAttribArray(position);
-            glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, cube_model.data);
+        glUniformMatrix4fv(glGetUniformLocation(state->main_shader_program, "model_matrix"), 1,
+                           GL_FALSE,
+                           model_matrix);
+        glUniformMatrix4fv(glGetUniformLocation(state->main_shader_program, "view_matrix"), 1,
+                           GL_FALSE,
+                           view_matrix);
+        glUniformMatrix4fv(glGetUniformLocation(state->main_shader_program, "projection_matrix"), 1,
+                           GL_FALSE, projection_matrix);
+
+        GLint position = glGetAttribLocation(state->main_shader_program, "vertex_position");
+        GLint uvs = glGetAttribLocation(state->main_shader_program, "vertex_uvs");
+        int bytes_per_float = 4;
+        int stride = bytes_per_float * cube_model.elems_stride;
+        glEnableVertexAttribArray(position);
+        glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, cube_model.data);
+        if (draw_texture) {
             glEnableVertexAttribArray(uvs);
             glVertexAttribPointer(uvs, 2, GL_FLOAT, GL_FALSE, stride, cube_model.data + 3);
-            glDrawArrays(GL_TRIANGLES, 0, cube_model.vertex_number);
         }
-
-    }
-
-    if (RENDER_FONT) {
-        is_first_frame = false;
-        size_t text_length = 0;
-        if (is_first_frame) {
-            is_first_frame = false;
-
-            const char *text = "Hell";
-            fill_glyph_info(text, font_vertex_data, font_text_max_length);
-
-            text_length = strlen(text);
-        }
-
-        // Render text in quads
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE, font_texture);
-
-        int bytes_per_float = 4;
-        int stride = bytes_per_float * (3 + 2);
-        gl_error("Before vertex_arrays", __LINE__);
-        glEnableVertexAttribArray(position);
-        GL_ERR;
-        glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, font_vertex_data);
-        GL_ERR;
-        glEnableVertexAttribArray(uvs);
-        GL_ERR;
-        glVertexAttribPointer(uvs, 2, GL_FLOAT, GL_FALSE, stride, font_vertex_data + 3);
-        GL_ERR;
-        glDrawArrays(GL_TRIANGLES, 0, text_length * 6);
-        GL_ERR;
+        glDrawArrays(GL_TRIANGLES, 0, cube_model.vertex_number);
     }
 
 
     glUseProgram(0);
+    GL_ERR;
 }
