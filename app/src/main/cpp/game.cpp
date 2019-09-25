@@ -62,6 +62,22 @@ auto fs_shader_source =
         "  gl_FragColor = texture2D(texture_unit, v_uvs);\n"
         "}\n";
 
+// Values
+const float3 ORIGIN = {0, 0, 0};
+const float3 X_AXIS = {1, 0, 0};
+const float3 Y_AXIS = {0, 1, 0};
+const float3 Z_AXIS = {0, 0, 1};
+
+float screen_w = 0;
+float screen_h = 0;
+
+float render_tick = 0;
+
+// Input
+float touch_x = 1.0f;
+float touch_y = 1.0f;
+float3 touch_model_trans = {0.0, 0.0, 0.0};
+
 // Models
 Camera camera;
 float view_matrix[] = M_MAT4_IDENTITY();
@@ -244,6 +260,9 @@ void init_game(State *state, int w, int h) {
     state->w = w;
     state->h = h;
 
+    screen_w = w;
+    screen_h = h;
+
     // GL state
     state->main_shader_program = create_program(vs_shader_source, fs_shader_source);
     gl_error("after create_program", __LINE__);
@@ -284,7 +303,8 @@ void init_game(State *state, int w, int h) {
     stbi_set_flip_vertically_on_load(true);
     unsigned char *pixels = stbi_load("texture_map.png", &width, &height, &channels, 0);
     assert(pixels != NULL);
-    log_fmt("Texture w: %d h: %d channels: %d is_null?: %d \n", width, height, channels, pixels == NULL);
+    log_fmt("Texture w: %d h: %d channels: %d is_null?: %d \n", width, height, channels,
+            pixels == NULL);
 
     //glEnable(GL_TEXTURE_2D);
     glGenTextures(1, &uvs_test_texture);
@@ -294,7 +314,8 @@ void init_game(State *state, int w, int h) {
     if (channels == 3) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
     } else {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                     pixels);
     }
 
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -304,10 +325,29 @@ void init_game(State *state, int w, int h) {
     gl_error("end init_game", __LINE__);
 }
 
-void update_input_game(float in_yaw, float in_pitch, float in_roll) {
+void update_touch_input_game(float in_touch_x, float in_touch_y) {
+    touch_x = in_touch_x / screen_w;
+    touch_y = in_touch_y / screen_h;
+    log_fmt("touch_x: %f touch_y: %f", touch_x, touch_y);
+}
+
+void update_sensor_input_game(float in_yaw, float in_pitch, float in_roll) {
 }
 
 void render_game(State *state) {
+    render_tick += 0.01f;
+
+    float camera_nudge = 8.0f;
+    camera.position.x = -1.0f + touch_x * 2.0f;
+    camera.position.y = -1.0f + touch_y * 2.0f;
+    camera.position.x *= camera_nudge;
+    camera.position.y *= camera_nudge;
+
+    set_float3(&camera.direction, 0 - camera.position.x, 0 - camera.position.y,
+               0 - camera.position.z);
+    m_mat4_identity(view_matrix);
+    m_mat4_lookat(view_matrix, &camera.position, &camera.direction, &camera.up);
+
     GL_ERR;
     // Render
     glClearColor(0.0, 0.01, 0.1, 1);
@@ -320,38 +360,62 @@ void render_game(State *state) {
 
     if (RENDER_CUBE) {
 
-        bool draw_texture = true;
-        if (draw_texture) {
-            glActiveTexture(GL_TEXTURE0);
-            GL_ERR;
-            glBindTexture(GL_TEXTURE_2D, uvs_test_texture);
-            GL_ERR;
-            GLint texture_unit = glGetAttribLocation(state->main_shader_program, "texture_unit");
-            GL_ERR;
-            glUniform1f(texture_unit, 0.0);
-            GL_ERR;
+        float offset_space = 0.8f;
+        float gx = 6.0f;
+        float gy = 6.0f;
+        for (float cy = -gy; cy < gy; cy += offset_space) {
+            for (float cx = -gx; cx < gx; cx += offset_space) {
+                float x = cx;
+                float y = touch_model_trans.y;
+                float z = cy;
+                set_float3(&touch_model_trans, x, y, z);
+
+                m_mat4_identity(model_matrix);
+                m_mat4_rotation_axis(model_matrix, &Y_AXIS, render_tick);
+                m_mat4_translation(model_matrix, &touch_model_trans);
+
+                // Render cube
+                {
+                    glActiveTexture(GL_TEXTURE0);
+                    GL_ERR;
+                    glBindTexture(GL_TEXTURE_2D, uvs_test_texture);
+                    GL_ERR;
+                    GLint texture_unit = glGetAttribLocation(state->main_shader_program,
+                                                             "texture_unit");
+                    GL_ERR;
+                    glUniform1f(texture_unit, 0.0);
+                    GL_ERR;
+
+                    glUniformMatrix4fv(
+                            glGetUniformLocation(state->main_shader_program, "model_matrix"),
+                            1,
+                            GL_FALSE,
+                            model_matrix);
+                    glUniformMatrix4fv(
+                            glGetUniformLocation(state->main_shader_program, "view_matrix"),
+                            1,
+                            GL_FALSE,
+                            view_matrix);
+                    glUniformMatrix4fv(
+                            glGetUniformLocation(state->main_shader_program, "projection_matrix"),
+                            1,
+                            GL_FALSE, projection_matrix);
+
+                    GLint position = glGetAttribLocation(state->main_shader_program,
+                                                         "vertex_position");
+                    GLint uvs = glGetAttribLocation(state->main_shader_program, "vertex_uvs");
+                    int bytes_per_float = 4;
+                    int stride = bytes_per_float * cube_model.elems_stride;
+                    glEnableVertexAttribArray(position);
+                    glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, cube_model.data);
+                    glEnableVertexAttribArray(uvs);
+                    glVertexAttribPointer(uvs, 2, GL_FLOAT, GL_FALSE, stride, cube_model.data + 3);
+                    glDrawArrays(GL_TRIANGLES, 0, cube_model.vertex_number);
+                }
+
+            }
         }
 
-        glUniformMatrix4fv(glGetUniformLocation(state->main_shader_program, "model_matrix"), 1,
-                           GL_FALSE,
-                           model_matrix);
-        glUniformMatrix4fv(glGetUniformLocation(state->main_shader_program, "view_matrix"), 1,
-                           GL_FALSE,
-                           view_matrix);
-        glUniformMatrix4fv(glGetUniformLocation(state->main_shader_program, "projection_matrix"), 1,
-                           GL_FALSE, projection_matrix);
-
-        GLint position = glGetAttribLocation(state->main_shader_program, "vertex_position");
-        GLint uvs = glGetAttribLocation(state->main_shader_program, "vertex_uvs");
-        int bytes_per_float = 4;
-        int stride = bytes_per_float * cube_model.elems_stride;
-        glEnableVertexAttribArray(position);
-        glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, cube_model.data);
-        if (draw_texture) {
-            glEnableVertexAttribArray(uvs);
-            glVertexAttribPointer(uvs, 2, GL_FLOAT, GL_FALSE, stride, cube_model.data + 3);
-        }
-        glDrawArrays(GL_TRIANGLES, 0, cube_model.vertex_number);
     }
 
 

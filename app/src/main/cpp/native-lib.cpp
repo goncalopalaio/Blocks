@@ -546,7 +546,11 @@ void Engine::TrimMemory() {
  * Process the next input event.
  */
 int32_t Engine::HandleInput(android_app *app, AInputEvent *event) {
-    // Engine* eng = (Engine*)app->userData;
+    if (AInputEvent_getType(event) == AINPUT_EVENT_TYPE_MOTION) {
+        update_touch_input_game(AMotionEvent_getX(event, 0), AMotionEvent_getY(event, 0));
+        return 1;
+    }
+
     return 0;
 }
 
@@ -610,7 +614,7 @@ void Engine::ProcessSensors(int32_t id) {
             ASensorEvent event;
             while (ASensorEventQueue_getEvents(sensor_event_queue_, &event, 1) > 0) {
                 // LOGI("Sensor: %f", event.acceleration.roll);
-                update_input_game(event.acceleration.azimuth, event.acceleration.pitch, event.acceleration.roll);
+                update_sensor_input_game(event.acceleration.azimuth, event.acceleration.pitch, event.acceleration.roll);
             }
         }
     }
