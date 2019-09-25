@@ -310,7 +310,7 @@ void update_input_game(float in_yaw, float in_pitch, float in_roll) {
 void render_game(State *state) {
     GL_ERR;
     // Render
-    glClearColor(0, 0, 1, 1);
+    glClearColor(0.0, 0.01, 0.1, 1);
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     GL_ERR;
