@@ -128,6 +128,8 @@ void log_shader_info_log(GLuint shader_obj_id) {
     GLint log_length;
     glGetShaderiv(shader_obj_id, GL_INFO_LOG_LENGTH, &log_length);
     GLchar log_buffer[log_length];
+    log_buffer[0] = '\0';
+
     glGetShaderInfoLog(shader_obj_id, log_length, NULL, log_buffer);
     log_fmt("Log:\n %s\n", log_buffer);
 }
@@ -136,6 +138,8 @@ void log_program_info_log(GLuint program_obj_id) {
     GLint log_length;
     glGetProgramiv(program_obj_id, GL_INFO_LOG_LENGTH, &log_length);
     GLchar log_buffer[log_length];
+    log_buffer[0] = '\0';
+
     glGetProgramInfoLog(program_obj_id, log_length, NULL, log_buffer);
 
     log_fmt("Log:\n %s\n", log_buffer);
@@ -271,8 +275,8 @@ void init_game(State *state, int w, int h) {
     gl_error("after viewport", __LINE__);
 
     // Load models
-    char *cube = read_entire_file("cube.obj.smodel", 'r');
-    cube_model = parse_smodel_file(cube);
+    char *cube = read_entire_file("duck.obj.smodel", 'r');
+    cube_model = parse_smodel_file_as_single_model(cube);
 
     log_fmt("elements_per_vertex: %d vertex_number: %d size: %d has_data: %d",
             cube_model.elems_per_vertex, cube_model.vertex_number, cube_model.size,
@@ -301,7 +305,7 @@ void init_game(State *state, int w, int h) {
     log_fmt("Loading texture!\n");
     int width, height, channels;
     stbi_set_flip_vertically_on_load(true);
-    unsigned char *pixels = stbi_load("texture_map.png", &width, &height, &channels, 0);
+    unsigned char *pixels = stbi_load("duck.png", &width, &height, &channels, 0);
     assert(pixels != NULL);
     log_fmt("Texture w: %d h: %d channels: %d is_null?: %d \n", width, height, channels,
             pixels == NULL);
@@ -350,7 +354,7 @@ void render_game(State *state) {
 
     GL_ERR;
     // Render
-    glClearColor(0.0, 0.01, 0.1, 1);
+    glClearColor(0.2, 0.2, 0.2, 1);
 
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     GL_ERR;
@@ -360,9 +364,9 @@ void render_game(State *state) {
 
     if (RENDER_CUBE) {
 
-        float offset_space = 0.8f;
-        float gx = 6.0f;
-        float gy = 6.0f;
+        float offset_space = 1.5f;
+        float gx = 4.6f;
+        float gy = 4.6f;
         for (float cy = -gy; cy < gy; cy += offset_space) {
             for (float cx = -gx; cx < gx; cx += offset_space) {
                 float x = cx;

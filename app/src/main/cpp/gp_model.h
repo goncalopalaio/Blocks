@@ -18,6 +18,6 @@ typedef struct {
 
 } SModelData;
 
-SModelData parse_smodel_file(char* file_data);
+SModelData parse_smodel_file_as_single_model(char* file_data);
 
 #endif //BLOCKS_GP_MODEL_H
