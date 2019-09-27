@@ -275,7 +275,7 @@ void init_game(State *state, int w, int h) {
     gl_error("after viewport", __LINE__);
 
     // Load models
-    char *cube = read_entire_file("duck.obj.smodel", 'r');
+    char *cube = read_entire_file("tri_stormt.obj.smodel", 'r');
     cube_model = parse_smodel_file_as_single_model(cube);
 
     log_fmt("elements_per_vertex: %d vertex_number: %d size: %d has_data: %d",
@@ -305,7 +305,7 @@ void init_game(State *state, int w, int h) {
     log_fmt("Loading texture!\n");
     int width, height, channels;
     stbi_set_flip_vertically_on_load(true);
-    unsigned char *pixels = stbi_load("duck.png", &width, &height, &channels, 0);
+    unsigned char *pixels = stbi_load("tri_stormt_ao.png", &width, &height, &channels, 0);
     assert(pixels != NULL);
     log_fmt("Texture w: %d h: %d channels: %d is_null?: %d \n", width, height, channels,
             pixels == NULL);
@@ -364,9 +364,9 @@ void render_game(State *state) {
 
     if (RENDER_CUBE) {
 
-        float offset_space = 1.5f;
-        float gx = 4.6f;
-        float gy = 4.6f;
+        float offset_space = 1.8f;
+        float gx = 4.0f;
+        float gy = 4.0f;
         for (float cy = -gy; cy < gy; cy += offset_space) {
             for (float cx = -gx; cx < gx; cx += offset_space) {
                 float x = cx;
