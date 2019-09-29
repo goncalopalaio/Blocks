@@ -41,7 +41,7 @@ void unload_resources_game(Asset *assets, int total_assets);
 
 void init_game(State *state, int w, int h);
 
-void update_touch_input_game(float touch_x, float touch_y);
+void update_touch_input_game(bool is_down, float touch_x, float touch_y);
 
 void update_sensor_input_game(float yaw, float pitch, float roll);
 

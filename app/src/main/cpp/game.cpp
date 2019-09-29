@@ -14,6 +14,7 @@
 
 #include "gp_platform.h"
 #include "gp_model.h"
+#include "gp_gl.h"
 
 #define STB_TRUETYPE_IMPLEMENTATION
 
@@ -22,12 +23,12 @@
 #define M_MATH_IMPLEMENTATION
 
 #include "m_math.h"
+#include "gp_math.h"
 
 #include "game.h"
 
-#define SHADER_LOGGING_ON true
+#include "gp_font_rendering.h"
 
-#define RENDER_FONT false
 #define RENDER_CUBE true
 
 
@@ -37,24 +38,47 @@ typedef struct {
     float3 up;
 } Camera;
 
-auto vs_shader_source =
+auto vs_font_source =
+        "attribute vec4 vertex_position;\n"
+        "attribute vec2 vertex_uvs;\n"
+        "uniform mat4 model_matrix;\n"
+        "uniform mat4 view_matrix;\n"
+        "uniform mat4 projection_matrix;\n"
+        "varying vec2 v_uvs;\n"
+        "varying float color;\n"
+        "void main() {\n"
+        "  color = vertex_position.z;"
+        " vec4 p = vec4(vertex_position.x, vertex_position.y, 0, vertex_position.w);"
+        "  v_uvs = vertex_uvs;"
+        "  gl_Position = projection_matrix * view_matrix * model_matrix * p;\n"
+        "}\n";
+
+auto fs_font_source =
+        "precision mediump float;\n"
+        "uniform sampler2D texture_unit;"
+        "varying vec2 v_uvs;\n"
+        "varying float color;\n"
+        "void main() {\n"
+        //"   gl_FragColor = vec4(color, v_uvs.x, v_uvs.y, 1.0);"
+        "  gl_FragColor = 0.5*vec4(color, v_uvs.x, v_uvs.y, 1.0) + 0.5*texture2D(texture_unit, v_uvs);\n"
+        //"   gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);"
+        "}\n";
+
+auto vs_textured_source =
         "attribute vec4 vertex_position;\n"
         "attribute vec2 vertex_uvs;\n"
         "uniform mat4 model_matrix;\n"
         "uniform mat4 view_matrix;\n"
         "uniform mat4 projection_matrix;\n"
         "uniform float roll;\n"
-        "varying float depth;\n"
         "varying vec2 v_uvs;\n"
         "void main() {\n"
         "  v_uvs = vertex_uvs;"
-        "  depth = roll + vertex_position.z;\n"
         "  gl_Position = projection_matrix * view_matrix * model_matrix * vertex_position;\n"
         "}\n";
 
-auto fs_shader_source =
+auto fs_textured_source =
         "precision mediump float;\n"
-        "varying float depth;\n"
         "uniform sampler2D texture_unit;"
         "varying vec2 v_uvs;\n"
         "void main() {\n"
@@ -74,9 +98,15 @@ float screen_h = 0;
 float render_tick = 0;
 
 // Input
-float touch_x = 1.0f;
-float touch_y = 1.0f;
+float touch_x = 0.0f;
+float touch_y = 0.0f;
+bool touch_is_down = false;
 float3 touch_model_trans = {0.0, 0.0, 0.0};
+
+// Fonts
+GLuint font_shader_program;
+TextData text_data;
+LoadedFont font_data;
 
 // Models
 Camera camera;
@@ -89,139 +119,10 @@ SModelData cube_model;
 // Textures
 GLuint uvs_test_texture = -1;
 
-static void print_gl_string(const char *name, GLenum s) {
-    const char *v = (const char *) glGetString(s);
-    log_fmt("GL %s = %s\n", name, v);
-}
-
-void gl_error(const char *file, int line) {
-    bool has_errors = false;
-    for (GLint error = glGetError(); error; error = glGetError()) {
-        log_fmt("\tGL_ERROR: file:%s:%d -- Hex: 0x%x Dec: %d)\n", file, line, error, error);
-        switch (error) {
-            case GL_INVALID_ENUM:
-                log_fmt("\tINVALID_ENUM");
-                break;
-            case GL_INVALID_VALUE:
-                log_fmt("\tINVALID_VALUE");
-                break;
-            case GL_INVALID_OPERATION:
-                log_fmt("\tINVALID_OPERATION");
-                break;
-            case GL_OUT_OF_MEMORY:
-                log_fmt("\tOUT_OF_MEMORY");
-                break;
-            case GL_INVALID_FRAMEBUFFER_OPERATION:
-                log_fmt("\tINVALID_FRAMEBUFFER_OPERATION");
-                break;
-            default:
-                log_fmt("\t__UNEXPECTED_VALUE__)");
-        }
-        has_errors = true;
-    }
-    assert(!has_errors);
-}
-
-#define GL_ERR gl_error(__FILE__, __LINE__)
-
-void log_shader_info_log(GLuint shader_obj_id) {
-    GLint log_length;
-    glGetShaderiv(shader_obj_id, GL_INFO_LOG_LENGTH, &log_length);
-    GLchar log_buffer[log_length];
-    log_buffer[0] = '\0';
-
-    glGetShaderInfoLog(shader_obj_id, log_length, NULL, log_buffer);
-    log_fmt("Log:\n %s\n", log_buffer);
-}
-
-void log_program_info_log(GLuint program_obj_id) {
-    GLint log_length;
-    glGetProgramiv(program_obj_id, GL_INFO_LOG_LENGTH, &log_length);
-    GLchar log_buffer[log_length];
-    log_buffer[0] = '\0';
-
-    glGetProgramInfoLog(program_obj_id, log_length, NULL, log_buffer);
-
-    log_fmt("Log:\n %s\n", log_buffer);
-}
-
-GLuint compile_shader(GLenum shader_type, const char *source) {
-    assert(source != nullptr);
-    GLint compile_status = 0;
-
-    GLuint shader_obj_id = glCreateShader(shader_type);
-    assert(shader_obj_id != 0);
-
-    glShaderSource(shader_obj_id, 1, &source, nullptr);
-    glCompileShader(shader_obj_id);
-
-    glGetShaderiv(shader_obj_id, GL_COMPILE_STATUS, &compile_status);
-
-    if (SHADER_LOGGING_ON) {
-        log_fmt("result for shader compilation: %d\n", shader_type);
-        log_shader_info_log(shader_obj_id);
-    }
-
-    if (!compile_status) {
-        glDeleteShader(shader_obj_id);
-    }
-    assert(compile_status != 0);
-
-    return shader_obj_id;
-}
-
-GLuint create_program(const char *pVertexSource, const char *pFragmentSource) {
-    GLuint vertexShader = compile_shader(GL_VERTEX_SHADER, pVertexSource);
-    GLuint pixelShader = compile_shader(GL_FRAGMENT_SHADER, pFragmentSource);
-
-    // link program
-    GLuint program_obj_id = glCreateProgram();
-    assert(program_obj_id != 0);
-
-    glAttachShader(program_obj_id, vertexShader);
-    glAttachShader(program_obj_id, pixelShader);
-    glLinkProgram(program_obj_id);
-
-    GLint link_status = GL_FALSE;
-    glGetProgramiv(program_obj_id, GL_LINK_STATUS, &link_status);
-
-    if (SHADER_LOGGING_ON) {
-        log_fmt("result for shader linking:\n");
-        log_program_info_log(program_obj_id);
-    }
-
-    if (link_status != GL_TRUE) {
-        glDeleteProgram(program_obj_id);
-    }
-    assert(link_status != 0);
-
-    return program_obj_id;
-}
-
 /**
  * M_MATH.H extras
  */
 
-void set_float3(float3 *v, float x, float y, float z) {
-    v->x = x;
-    v->y = y;
-    v->z = z;
-}
-
-/**
- * Arrays
- */
-
-inline void set_vector3_arr(float *v, float x, float y, float z) {
-    *v = x;
-    *(v + 1) = y;
-    *(v + 2) = z;
-}
-
-inline void set_vector2_arr(float *v, float x, float y) {
-    *v = x;
-    *(v + 1) = y;
-}
 
 /**
  * Game
@@ -252,6 +153,16 @@ void unload_resources_game(Asset *assets, int total_assets) {
     log_str("unload_resources_game");
 }
 
+void update_camera(Camera* camera, float view_matrix[], float px, float py, float pz, float lx, float ly, float lz) {
+    m_mat4_identity(view_matrix);
+
+    set_float3(&camera->position, px, py, pz);
+    set_float3(&camera->direction, lx - camera->position.x, ly - camera->position.y,
+               lz - camera->position.z);
+    set_float3(&camera->up, 0, 1, 0);
+    m_mat4_lookat(view_matrix, &camera->position, &camera->direction, &camera->up);
+}
+
 void init_game(State *state, int w, int h) {
     log_str("init_game");
 
@@ -268,14 +179,19 @@ void init_game(State *state, int w, int h) {
     screen_h = h;
 
     // GL state
-    state->main_shader_program = create_program(vs_shader_source, fs_shader_source);
+    log_fmt("Creating program: Main\n--------------");
+    state->main_shader_program = create_program(vs_textured_source, fs_textured_source);
+    gl_error("after create_program", __LINE__);
+
+    log_fmt("Creating program: Font\n--------------");
+    font_shader_program = create_program(vs_font_source, fs_font_source);
     gl_error("after create_program", __LINE__);
 
     glViewport(0, 0, w, h);
     gl_error("after viewport", __LINE__);
 
     // Load models
-    char *cube = read_entire_file("tri_stormt.obj.smodel", 'r');
+    char *cube = read_entire_file("cube.obj.smodel", 'r');
     cube_model = parse_smodel_file_as_single_model(cube);
 
     log_fmt("elements_per_vertex: %d vertex_number: %d size: %d has_data: %d",
@@ -285,20 +201,15 @@ void init_game(State *state, int w, int h) {
     // Scenery positions
 
     float aspect = w / (float) h;
-    m_mat4_perspective(projection_matrix, 13.0, aspect, 0.1, 100.0);
-    m_mat4_identity(view_matrix);
+    m_mat4_perspective(projection_matrix, 13.0, aspect, 0.1, 700.0);
 
-    set_float3(&camera.position, 2.0, 3.0, 2.0);
-    set_float3(&camera.direction, 0 - camera.position.x, 0 - camera.position.y,
-               0 - camera.position.z);
-    set_float3(&camera.up, 0, 1, 0);
+    update_camera(&camera, view_matrix, 12,12,12, 0,0,0);
+
 
     log_fmt("Camera position %f %f %f\n", camera.position.x, camera.position.y, camera.position.z);
     log_fmt("Camera direction %f %f %f\n", camera.direction.x, camera.direction.y,
             camera.direction.z);
     log_fmt("Camera up %f %f %f\n", camera.up.x, camera.up.y, camera.up.z);
-
-    m_mat4_lookat(view_matrix, &camera.position, &camera.direction, &camera.up);
 
 
     // Load images
@@ -323,15 +234,38 @@ void init_game(State *state, int w, int h) {
     }
 
     glBindTexture(GL_TEXTURE_2D, 0);
-
     stbi_image_free(pixels);
+
+    // Font loading
+    const uint32_t font_size = 11;
+    const uint32_t font_atlas_width = 1024;
+    const uint32_t font_atlas_height = 1024;
+    const uint32_t font_oversample_x = 2;
+    const uint32_t font_oversample_y = 2;
+    const int font_text_max_length = 16;
+    font_init(font_text_max_length, font_size, font_atlas_width, font_atlas_height, font_oversample_x, font_oversample_y, &font_data, &text_data);
+
+    log_loaded_font(&font_data);
+    log_text_data(&text_data);
+
+    font_prepare_text(&font_data, &text_data, "AGGGF", text_data.vertex_data, text_data.max_text_length);
 
     gl_error("end init_game", __LINE__);
 }
 
-void update_touch_input_game(float in_touch_x, float in_touch_y) {
+void update_touch_input_game(bool is_down, float in_touch_x, float in_touch_y) {
+    touch_is_down = is_down;
+    if (!is_down) {
+        touch_x = 0;
+        touch_y = 0;
+        return;
+    }
+
     touch_x = in_touch_x / screen_w;
     touch_y = in_touch_y / screen_h;
+
+    touch_x = -1.0f + touch_x * 2.0f;
+    touch_y = -1.0f + touch_y * 2.0f;
     log_fmt("touch_x: %f touch_y: %f", touch_x, touch_y);
 }
 
@@ -341,16 +275,16 @@ void update_sensor_input_game(float in_yaw, float in_pitch, float in_roll) {
 void render_game(State *state) {
     render_tick += 0.01f;
 
-    float camera_nudge = 8.0f;
-    camera.position.x = -1.0f + touch_x * 2.0f;
-    camera.position.y = -1.0f + touch_y * 2.0f;
-    camera.position.x *= camera_nudge;
-    camera.position.y *= camera_nudge;
+    if (touch_is_down) {
+        float camera_nudge = 8.0f;
+        update_camera(&camera, view_matrix, camera.position.x + (touch_x * camera_nudge),camera.position.y + (touch_x * camera_nudge),camera.position.z, 0,0,0);
 
-    set_float3(&camera.direction, 0 - camera.position.x, 0 - camera.position.y,
-               0 - camera.position.z);
-    m_mat4_identity(view_matrix);
-    m_mat4_lookat(view_matrix, &camera.position, &camera.direction, &camera.up);
+        set_float3(&camera.direction, 0 - camera.position.x, 0 - camera.position.y,
+                   0 - camera.position.z);
+        m_mat4_identity(view_matrix);
+        m_mat4_lookat(view_matrix, &camera.position, &camera.direction, &camera.up);
+
+    }
 
     GL_ERR;
     // Render
@@ -365,8 +299,8 @@ void render_game(State *state) {
     if (RENDER_CUBE) {
 
         float offset_space = 1.8f;
-        float gx = 4.0f;
-        float gy = 4.0f;
+        float gx = 1.0f;
+        float gy = 1.0f;
         for (float cy = -gy; cy < gy; cy += offset_space) {
             for (float cx = -gx; cx < gx; cx += offset_space) {
                 float x = cx;
@@ -421,8 +355,12 @@ void render_game(State *state) {
         }
 
     }
-
-
     glUseProgram(0);
+
+    glUseProgram(font_shader_program);
+    m_mat4_identity(model_matrix);
+    font_render(font_shader_program, font_data.font_texture, &text_data, model_matrix, view_matrix, projection_matrix);
+    glUseProgram(0);
+
     GL_ERR;
 }

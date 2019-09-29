@@ -40,28 +40,29 @@
 #include "game.h"
 
 #include <dlfcn.h>
-ASensorManager* AcquireASensorManagerInstance(android_app* app) {
 
-    if(!app)
+ASensorManager *AcquireASensorManagerInstance(android_app *app) {
+
+    if (!app)
         return nullptr;
 
     typedef ASensorManager *(*PF_GETINSTANCEFORPACKAGE)(const char *name);
-    void* androidHandle = dlopen("libandroid.so", RTLD_NOW);
+    void *androidHandle = dlopen("libandroid.so", RTLD_NOW);
     PF_GETINSTANCEFORPACKAGE getInstanceForPackageFunc = (PF_GETINSTANCEFORPACKAGE)
             dlsym(androidHandle, "ASensorManager_getInstanceForPackage");
     if (getInstanceForPackageFunc) {
-        JNIEnv* env = nullptr;
+        JNIEnv *env = nullptr;
         app->activity->vm->AttachCurrentThread(&env, NULL);
 
         jclass android_content_Context = env->GetObjectClass(app->activity->clazz);
         jmethodID midGetPackageName = env->GetMethodID(android_content_Context,
                                                        "getPackageName",
                                                        "()Ljava/lang/String;");
-        jstring packageName= (jstring)env->CallObjectMethod(app->activity->clazz,
-                                                            midGetPackageName);
+        jstring packageName = (jstring) env->CallObjectMethod(app->activity->clazz,
+                                                              midGetPackageName);
 
         const char *nativePackageName = env->GetStringUTFChars(packageName, 0);
-        ASensorManager* mgr = getInstanceForPackageFunc(nativePackageName);
+        ASensorManager *mgr = getInstanceForPackageFunc(nativePackageName);
         env->ReleaseStringUTFChars(packageName, nativePackageName);
         app->activity->vm->DetachCurrentThread();
         if (mgr) {
@@ -79,6 +80,7 @@ ASensorManager* AcquireASensorManagerInstance(android_app* app) {
 
     return getInstanceFunc();
 }
+
 /******************************************************************
  * OpenGL context handler
  * The class handles OpenGL and EGL context based on Android activity life cycle
@@ -398,10 +400,9 @@ class Engine {
 
     android_app *app_;
 
-    ASensorManager* sensor_manager_;
-    const ASensor* accelerometer_sensor_;
-    ASensorEventQueue* sensor_event_queue_;
-
+    ASensorManager *sensor_manager_;
+    const ASensor *accelerometer_sensor_;
+    ASensorEventQueue *sensor_event_queue_;
 
 
     void UpdateFPS(float fFPS);
@@ -546,9 +547,15 @@ void Engine::TrimMemory() {
  * Process the next input event.
  */
 int32_t Engine::HandleInput(android_app *app, AInputEvent *event) {
-    if (AInputEvent_getType(event) == AINPUT_EVENT_TYPE_MOTION) {
-        update_touch_input_game(AMotionEvent_getX(event, 0), AMotionEvent_getY(event, 0));
+    int32_t action = AMotionEvent_getAction(event);
+    unsigned int flags = action & AMOTION_EVENT_ACTION_MASK;
+
+    if (flags & (AMOTION_EVENT_ACTION_MOVE | AMOTION_EVENT_ACTION_DOWN) &&
+        AInputEvent_getType(event) == AINPUT_EVENT_TYPE_MOTION) {
+        update_touch_input_game(true, AMotionEvent_getX(event, 0), AMotionEvent_getY(event, 0));
         return 1;
+    } else {
+        update_touch_input_game(false, 0, 0);
     }
 
     return 0;
@@ -614,7 +621,8 @@ void Engine::ProcessSensors(int32_t id) {
             ASensorEvent event;
             while (ASensorEventQueue_getEvents(sensor_event_queue_, &event, 1) > 0) {
                 // LOGI("Sensor: %f", event.acceleration.roll);
-                update_sensor_input_game(event.acceleration.azimuth, event.acceleration.pitch, event.acceleration.roll);
+                update_sensor_input_game(event.acceleration.azimuth, event.acceleration.pitch,
+                                         event.acceleration.roll);
             }
         }
     }
