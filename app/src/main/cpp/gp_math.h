@@ -34,6 +34,15 @@ inline float *push_v3_arr(float *v, float x, float y, float z) {
     return v + 3;
 }
 
+inline float *push_v4_arr(float *v, float x, float y, float z, float a) {
+    v[0] = x;
+    v[1] = y;
+    v[2] = z;
+    v[3] = a;
+
+    return v + 4;
+}
+
 inline float *push_v2_arr(float *v, float x, float y) {
     v[0] = x;
     v[1] = y;

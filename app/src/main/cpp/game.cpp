@@ -17,7 +17,8 @@
 #include "gp_gl.h"
 
 #define STB_TRUETYPE_IMPLEMENTATION
-
+#define STB_RECT_PACK_IMPLEMENTATION
+#include "stb_rect_pack.h"
 #include "stb_truetype.h"
 
 #define M_MATH_IMPLEMENTATION
@@ -45,11 +46,9 @@ auto vs_font_source =
         "uniform mat4 view_matrix;\n"
         "uniform mat4 projection_matrix;\n"
         "varying vec2 v_uvs;\n"
-        "varying float color;\n"
         "void main() {\n"
-        "  color = vertex_position.z;"
-        " vec4 p = vec4(vertex_position.x, vertex_position.y, 0, vertex_position.w);"
-        "  v_uvs = vertex_uvs;"
+        " vec4 p = vec4(vertex_position.z, vertex_position.w, 0, 1.0);"
+        "  v_uvs = vertex_position.xy;"
         "  gl_Position = projection_matrix * view_matrix * model_matrix * p;\n"
         "}\n";
 
@@ -57,10 +56,9 @@ auto fs_font_source =
         "precision mediump float;\n"
         "uniform sampler2D texture_unit;"
         "varying vec2 v_uvs;\n"
-        "varying float color;\n"
         "void main() {\n"
         //"   gl_FragColor = vec4(color, v_uvs.x, v_uvs.y, 1.0);"
-        "  gl_FragColor = 0.5*vec4(color, v_uvs.x, v_uvs.y, 1.0) + 0.5*texture2D(texture_unit, v_uvs);\n"
+        "  gl_FragColor = 0.5*vec4(1.0, v_uvs.x, v_uvs.y, 1.0) + 0.5*texture2D(texture_unit, v_uvs);\n"
         //"   gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);"
         "}\n";
 
@@ -105,8 +103,7 @@ float3 touch_model_trans = {0.0, 0.0, 0.0};
 
 // Fonts
 GLuint font_shader_program;
-TextData text_data;
-LoadedFont font_data;
+FontData font_data;
 
 // Models
 Camera camera;
@@ -157,8 +154,7 @@ void update_camera(Camera* camera, float view_matrix[], float px, float py, floa
     m_mat4_identity(view_matrix);
 
     set_float3(&camera->position, px, py, pz);
-    set_float3(&camera->direction, lx - camera->position.x, ly - camera->position.y,
-               lz - camera->position.z);
+    set_float3(&camera->direction, lx, ly, lz);
     set_float3(&camera->up, 0, 1, 0);
     m_mat4_lookat(view_matrix, &camera->position, &camera->direction, &camera->up);
 }
@@ -203,7 +199,7 @@ void init_game(State *state, int w, int h) {
     float aspect = w / (float) h;
     m_mat4_perspective(projection_matrix, 13.0, aspect, 0.1, 700.0);
 
-    update_camera(&camera, view_matrix, 12,12,12, 0,0,0);
+    update_camera(&camera, view_matrix, 121,12,100, 0, 0, -1);
 
 
     log_fmt("Camera position %f %f %f\n", camera.position.x, camera.position.y, camera.position.z);
@@ -237,19 +233,9 @@ void init_game(State *state, int w, int h) {
     stbi_image_free(pixels);
 
     // Font loading
-    const uint32_t font_size = 11;
-    const uint32_t font_atlas_width = 1024;
-    const uint32_t font_atlas_height = 1024;
-    const uint32_t font_oversample_x = 2;
-    const uint32_t font_oversample_y = 2;
-    const int font_text_max_length = 16;
-    font_init(font_text_max_length, font_size, font_atlas_width, font_atlas_height, font_oversample_x, font_oversample_y, &font_data, &text_data);
+    const uint32_t font_size = 70;
 
-    log_loaded_font(&font_data);
-    log_text_data(&text_data);
-
-    font_prepare_text(&font_data, &text_data, "AGGGF", text_data.vertex_data, text_data.max_text_length);
-
+    font_data = font_init(font_size);
     gl_error("end init_game", __LINE__);
 }
 
@@ -276,14 +262,8 @@ void render_game(State *state) {
     render_tick += 0.01f;
 
     if (touch_is_down) {
-        float camera_nudge = 8.0f;
-        update_camera(&camera, view_matrix, camera.position.x + (touch_x * camera_nudge),camera.position.y + (touch_x * camera_nudge),camera.position.z, 0,0,0);
-
-        set_float3(&camera.direction, 0 - camera.position.x, 0 - camera.position.y,
-                   0 - camera.position.z);
-        m_mat4_identity(view_matrix);
-        m_mat4_lookat(view_matrix, &camera.position, &camera.direction, &camera.up);
-
+        float camera_nudge = 0.01f;
+        update_camera(&camera, view_matrix, camera.position.x, camera.position.y, camera.position.z, camera.direction.x + (touch_x * camera_nudge),camera.direction.y + (-touch_y * camera_nudge),camera.direction.z);
     }
 
     GL_ERR;
@@ -359,7 +339,7 @@ void render_game(State *state) {
 
     glUseProgram(font_shader_program);
     m_mat4_identity(model_matrix);
-    font_render(font_shader_program, font_data.font_texture, &text_data, model_matrix, view_matrix, projection_matrix);
+    font_render(font_data, 0, 0, "mSk", font_shader_program, model_matrix, view_matrix, projection_matrix);
     glUseProgram(0);
 
     GL_ERR;
