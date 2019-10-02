@@ -61,13 +61,35 @@ typedef struct {
 
     int max_text_length;
 
-    stbtt_packedchar *font_char_data;
+    stbtt_bakedchar *font_char_data;
     int font_bitmap_width;
     int font_bitmap_height;
     int font_first_char;
 } FontData;
 
-FontData font_init(uint32_t font_size) {
+GLuint upload_new_texture(int width, int height, int channels, unsigned char* pixels) {
+    GLuint tex;
+
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    if (channels == 3) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+    } else if(channels == 4) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    } else {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, width, height, 0, GL_ALPHA, GL_UNSIGNED_BYTE, pixels);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    return tex;
+}
+
+FontData font_init() {
     FontData result;
     result.texture = 0;
     result.vertex_data = NULL;
@@ -86,50 +108,23 @@ FontData font_init(uint32_t font_size) {
     } else {
         log_str("font loaded");
     }
-
+    const uint32_t font_size = 100;
     const char font_first_char = ' ';
     const int font_char_count = '~' - ' ';
-    const int bitmap_width = 1024;
+    const int bitmap_width = 512;
     const int bitmap_height = 512;
-    const int oversample_x = 1;
-    const int oversample_y = 1;
 
     log_fmt("font_init - font_first_char: %d", font_first_char);
     log_fmt("font_init - font_char_count: %d", font_char_count);
 
     auto *bitmap = (uint8_t *) malloc(
             sizeof(uint8_t) * bitmap_width * bitmap_height);
-    auto font_char_data = (stbtt_packedchar *) malloc(
-            sizeof(stbtt_packedchar) * font_char_count);
+    auto font_char_data = (stbtt_bakedchar *) malloc(
+            sizeof(stbtt_bakedchar) * font_char_count);
 
-    stbtt_pack_context context;
-    if (!stbtt_PackBegin(&context, bitmap, bitmap_width, bitmap_height, 0, 1,
-                         NULL)) {
-        log_str("failed to pack begin font");
-        assert(0);
-        return result;
-    }
-    stbtt_PackSetOversampling(&context, oversample_x, oversample_y);
-    if (!stbtt_PackFontRange(&context, font_file, 0, font_size, font_first_char,
-                             font_char_count, font_char_data)) {
-        log_str("failed to pack font");
-        assert(0);
-        return result;
-    }
-    stbtt_PackEnd(&context);
+    stbtt_BakeFontBitmap(font_file,0, font_size, bitmap, bitmap_width, bitmap_height, font_first_char, font_char_count, font_char_data);
 
-    GLuint font_texture;
-    // Upload texture data
-    glGenTextures(1, &font_texture);
-    glBindTexture(GL_TEXTURE_2D, font_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, bitmap_width, bitmap_height, 0, GL_RGB,
-                 GL_UNSIGNED_BYTE, bitmap);
-    glHint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    GLuint font_texture = upload_new_texture(bitmap_width, bitmap_height, 1, bitmap);
 
     // Cleanup
     free(bitmap);
@@ -137,8 +132,8 @@ FontData font_init(uint32_t font_size) {
 
     {
         result.texture = font_texture;
-        result.max_text_length = 256;
-        result.vertex_data_size = sizeof(float) * result.max_text_length * 6 * 4;
+        result.max_text_length = 10;
+        result.vertex_data_size = sizeof(float) * result.max_text_length * 6 * 5;
 
         result.font_char_data = font_char_data;
         result.font_bitmap_width = bitmap_width;
@@ -151,31 +146,27 @@ FontData font_init(uint32_t font_size) {
     return result;
 }
 
-void font_render(FontData d, float x, float y, const char *text, int shader, float model_matrix[], float view_matrix[], float projection_matrix[]) {
+void font_render(FontData d, float initial_x, float initial_y, const char *text, int shader, float model_matrix[], float view_matrix[], float projection_matrix[]) {
     memset(d.vertex_data, 0, d.vertex_data_size);
     int len = M_MIN(d.max_text_length, strlen(text));
     //log_fmt("rendering %d characters", len);
+    float x = initial_x;
+    float y = initial_y;
+    stbtt_aligned_quad q;
     float* buf = d.vertex_data;
     for (int i = 0; i < len; i++) {
         char character = text[i];
-        //log_fmt("reading %c character", character);
+        int index_to_char = character - d.font_first_char;
+        log_fmt("rendering %c x: %f y: %f", character, x, y);
 
-        stbtt_aligned_quad q;
-        stbtt_GetPackedQuad(d.font_char_data,
-                            d.font_bitmap_width,
-                            d.font_bitmap_height,
-                            character - d.font_first_char,
-                            &x,
-                            &y,
-                            &q,
-                            1);
+        stbtt_GetBakedQuad(d.font_char_data, d.font_bitmap_width, d.font_bitmap_height, index_to_char, &x,&y, &q, 1);
+        {
+            // invert the y coordinates since the texture is up side down.
+            q.y0 = -q.y0;
+            q.y1 = -q.y1;
 
-        buf = push_v4_arr(buf, q.s0, q.t0, q.x0, q.y0);
-        buf = push_v4_arr(buf,q.s1, q.t0, q.x1, q.y0);
-        buf = push_v4_arr(buf,q.s1, q.t1, q.x1, q.y1);
-        buf = push_v4_arr(buf,q.s0, q.t0, q.x0, q.y0);
-        buf = push_v4_arr(buf,q.s1, q.t1, q.x1, q.y1);
-        buf = push_v4_arr(buf,q.s0, q.t1, q.x0, q.y1);
+            buf = push_textured_quad_scaled_arr(buf, q.x0, q.y0, q.x1, q.y1, q.s0, q.t0, q.s1, q.t1, 1.1, 1.1);
+        }
     }
 
     // Render
@@ -183,6 +174,8 @@ void font_render(FontData d, float x, float y, const char *text, int shader, flo
 
         GLint position = glGetAttribLocation(shader,
                                              "vertex_position");
+        GLint uvs = glGetAttribLocation(shader, "vertex_uvs");
+
         GL_ERR;
         GLint texture_unit = glGetAttribLocation(shader,
                                                  "texture_unit");
@@ -209,7 +202,15 @@ void font_render(FontData d, float x, float y, const char *text, int shader, flo
         GL_ERR;
 
         // Render text in quads
-        glActiveTexture(GL_TEXTURE0);
+        int bytes_per_float = 4;
+        int stride = bytes_per_float * 5;
+        glEnableVertexAttribArray(position);
+        glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, d.vertex_data);
+        glEnableVertexAttribArray(uvs);
+        glVertexAttribPointer(uvs, 2, GL_FLOAT, GL_FALSE, stride, d.vertex_data + 3);
+        glDrawArrays(GL_TRIANGLES, 0, len * 6);
+
+        /*glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, d.texture);
         GL_ERR;
         int bytes_per_float = 4;
@@ -219,7 +220,7 @@ void font_render(FontData d, float x, float y, const char *text, int shader, flo
         GL_ERR;
         glVertexAttribPointer(position, 4, GL_FLOAT, GL_FALSE, stride, d.vertex_data);
         GL_ERR;
-        glDrawArrays(GL_TRIANGLES, 0, d.max_text_length * 2);
+        glDrawArrays(GL_TRIANGLES, 0, d.max_text_length * 6);*/
         GL_ERR;
     }
 
