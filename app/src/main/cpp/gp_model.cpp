@@ -55,7 +55,7 @@ SModelData parse_smodel_file_as_single_model(char* file_data) {
         if (strcmp(token, "%") == 0) {
             // Skipping
             token = strtok(nullptr, " \n");
-            log_fmt("(>) %s", token);
+            //log_fmt("(>) %s", token);
 
             continue;
         }
@@ -66,7 +66,7 @@ SModelData parse_smodel_file_as_single_model(char* file_data) {
             // Skipping
             for (int i = 0; i < 10; ++i) {
                 token = strtok(nullptr, " \n");
-                log_fmt("(>) %s", token);
+                //log_fmt("(>) %s", token);
             }
 
             continue;

@@ -6,7 +6,7 @@
 #define BLOCKS_GP_LINE_RENDERER_H
 
 #define GP_LINE_RENDERER_POS_ELEMS 3
-#define GP_LINE_RENDERER_COLOR_ELEMS 1
+// #define GP_LINE_RENDERER_COLOR_ELEMS 1
 
 typedef struct {
     int current_lines;
@@ -20,19 +20,19 @@ typedef struct {
 void line_renderer_init(LineRenderer *renderer, int max_lines) {
     auto vs_source =
             "attribute vec4 vertex_position;\n"
-            "attribute float vertex_color_index;\n"
+            // "attribute float vertex_color_index;\n"
             "uniform mat4 model_matrix;\n"
             "uniform mat4 view_matrix;\n"
             "uniform mat4 projection_matrix;\n"
-            "varying float color;"
+            // "varying float color;"
             "void main() {\n"
-            "  color = vertex_color_index;"
+            // "  color = vertex_color_index;"
             "  gl_Position = projection_matrix * view_matrix * model_matrix * vertex_position;\n"
             "}\n";
 
     auto fs_source =
             "precision mediump float;\n"
-            "varying float color;"
+            // "varying float color;"
             "void main() {\n"
             "   vec4 colors[5];\n"
             "   colors[0] = vec4(1.0,0.0,0.0, 1.0);\n"
@@ -40,14 +40,16 @@ void line_renderer_init(LineRenderer *renderer, int max_lines) {
             "   colors[2] = vec4(0.0,0.0,1.0, 1.0);\n"
             "   colors[3] = vec4(1.0,1.0,0.0, 1.0);\n"
             "   colors[4] = vec4(1.0,0.0,1.0, 1.0);"
-            "   gl_FragColor = colors[int(color)];"
+            //"   gl_FragColor = colors[int(0.0)];"
+            "   gl_FragColor = vec4(1.0,0.0,0.0, 1.0);;"
             "}\n";
 
     renderer->shader = create_program(vs_source, fs_source);
 
     renderer->current_lines = 0;
     renderer->max_lines = max_lines;
-    renderer->elements_per_vertex = GP_LINE_RENDERER_POS_ELEMS + GP_LINE_RENDERER_COLOR_ELEMS;
+    //renderer->elements_per_vertex = GP_LINE_RENDERER_POS_ELEMS + GP_LINE_RENDERER_COLOR_ELEMS;
+    renderer->elements_per_vertex = GP_LINE_RENDERER_POS_ELEMS;
     renderer->vertex_data = (float *) malloc(
             sizeof(float) * renderer->elements_per_vertex * renderer->max_lines * 2);
 }
@@ -65,7 +67,8 @@ line_renderer_push(LineRenderer *renderer, float ax, float ay, float az, float b
     renderer->current_lines += 1;
     assert(renderer->current_lines < renderer->max_lines);
     renderer->push_ptr = push_v3_arr(renderer->push_ptr, ax, ay, az);
-    renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
+    renderer->push_ptr = push_v3_arr(renderer->push_ptr, bx, by, bz);
+    //renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
 }
 
 inline void
@@ -79,51 +82,30 @@ line_renderer_push_point(LineRenderer *renderer, float px, float py, float pz, i
     assert(renderer->current_lines < renderer->max_lines);
 
     renderer->push_ptr = push_v3_arr(renderer->push_ptr, px + side, py, pz);
-    renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
+    //renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
     renderer->push_ptr = push_v3_arr(renderer->push_ptr, px, py, pz);
-    renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
+    //renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
     renderer->push_ptr = push_v3_arr(renderer->push_ptr, px - side, py, pz);
-    renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
+    //renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
     renderer->push_ptr = push_v3_arr(renderer->push_ptr, px, py, pz);
-    renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
+    //renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
     renderer->push_ptr = push_v3_arr(renderer->push_ptr, px, py + side, pz);
-    renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
+    //renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
     renderer->push_ptr = push_v3_arr(renderer->push_ptr, px, py, pz);
-    renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
+    //renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
     renderer->push_ptr = push_v3_arr(renderer->push_ptr, px, py - side, pz);
-    renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
+    //renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
     renderer->push_ptr = push_v3_arr(renderer->push_ptr, px, py, pz);
-    renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
+    //renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
     renderer->push_ptr = push_v3_arr(renderer->push_ptr, px, py, pz + side);
-    renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
+    //renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
     renderer->push_ptr = push_v3_arr(renderer->push_ptr, px, py, pz);
-    renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
+    //renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
     renderer->push_ptr = push_v3_arr(renderer->push_ptr, px, py, pz - side);
-    renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
+    //renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
     renderer->push_ptr = push_v3_arr(renderer->push_ptr, px, py, pz);
-    renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
+    //renderer->push_ptr = push_v1_arr(renderer->push_ptr, color_index);
 }
-
-/**
- *
- *
- * fun buildPointLines(colorIndex: Int, position: Vec3, side: Float = 0.05f): ArrayList<Line> {
-    val pointInSpace = ArrayList<Line>()
-
-    pointInSpace.add(Line(position.x,position.y ,position.z, position.x, position.y,position.z, colorIndex))
-
-    pointInSpace.add(Line(position.x + side,position.y ,position.z, position.x, position.y,position.z, colorIndex))
-    pointInSpace.add(Line(position.x - side,position.y ,position.z, position.x, position.y,position.z, colorIndex))
-
-    pointInSpace.add(Line(position.x ,position.y + side,position.z, position.x, position.y,position.z, colorIndex))
-    pointInSpace.add(Line(position.x ,position.y - side,position.z, position.x, position.y,position.z, colorIndex))
-
-    pointInSpace.add(Line(position.x ,position.y, position.z + side, position.x, position.y,position.z, colorIndex))
-    pointInSpace.add(Line(position.x ,position.y, position.z - side, position.x, position.y,position.z, colorIndex))
-
-    return pointInSpace
-}
- */
 
 inline void line_renderer_render(LineRenderer *renderer, float model_matrix[], float view_matrix[],
                                  float projection_matrix[]) {
@@ -147,18 +129,21 @@ inline void line_renderer_render(LineRenderer *renderer, float model_matrix[], f
             GL_FALSE, projection_matrix);
 
     GLint position = glGetAttribLocation(shader, "vertex_position");
-    GLint color = glGetAttribLocation(shader, "vertex_color_index");
+    // GLint color = glGetAttribLocation(shader, "vertex_color_index");
     int bytes_per_float = 4;
     int stride = bytes_per_float * renderer->elements_per_vertex;
     glEnableVertexAttribArray(position);
     glVertexAttribPointer(position, GP_LINE_RENDERER_POS_ELEMS, GL_FLOAT, GL_FALSE, stride,
                           renderer->vertex_data);
-    glEnableVertexAttribArray(color);
-    //GL_ERR;
-    glVertexAttribPointer(color, GP_LINE_RENDERER_COLOR_ELEMS, GL_FLOAT, GL_FALSE, stride,
-                          renderer->vertex_data + GP_LINE_RENDERER_POS_ELEMS * 2);
+    //glEnableVertexAttribArray(color);
+    //glVertexAttribPointer(color, GP_LINE_RENDERER_COLOR_ELEMS, GL_FLOAT, GL_FALSE, stride, renderer->vertex_data + GP_LINE_RENDERER_POS_ELEMS * 2);
+    GL_ERR;
     glDrawArrays(GL_LINES, 0, renderer->current_lines * 2);
+
+    GL_ERR;
     glUseProgram(0);
+
+    GL_ERR;
 }
 
 #endif //BLOCKS_GP_LINE_RENDERER_H

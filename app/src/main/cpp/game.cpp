@@ -18,6 +18,7 @@
 
 #define STB_TRUETYPE_IMPLEMENTATION
 #define STB_RECT_PACK_IMPLEMENTATION
+
 #include "stb_rect_pack.h"
 #include "stb_truetype.h"
 
@@ -156,17 +157,21 @@ void unload_resources_game(Asset *assets, int total_assets) {
     log_str("unload_resources_game");
 }
 
-void update_camera(Camera* camera, float view_matrix[], float px, float py, float pz, float lx, float ly, float lz) {
+void
+update_camera(Camera *camera, float view_matrix[], float px, float py, float pz, float lx, float ly,
+              float lz) {
     m_mat4_identity(view_matrix);
 
     set_float3(&camera->position, px, py, pz);
     set_float3(&camera->look_at, lx, ly, lz);
-    set_float3(&camera->direction, camera->look_at.x - camera->position.x, camera->look_at.y - camera->position.y,
+    set_float3(&camera->direction, camera->look_at.x - camera->position.x,
+               camera->look_at.y - camera->position.y,
                camera->look_at.z - camera->position.z);
     set_float3(&camera->up, 0, 1, 0);
     m_mat4_lookat(view_matrix, &camera->position, &camera->direction, &camera->up);
 
-    log_fmt("Camera - p: %f, %f, %f d: %f, %f, %f", camera->position.x, camera->position.y, camera->position.z, camera->direction.x, camera->direction.y, camera->direction.z);
+    log_fmt("Camera - p: %f, %f, %f d: %f, %f, %f", camera->position.x, camera->position.y,
+            camera->position.z, camera->direction.x, camera->direction.y, camera->direction.z);
 }
 
 void init_game(State *state, int w, int h) {
@@ -213,7 +218,7 @@ void init_game(State *state, int w, int h) {
 
     float dist = 10;
     //update_camera(&camera, view_matrix, dist, 13.000000, dist, 0, 0, 0);
-    update_camera(&camera, view_matrix, dist,dist,dist, 0, 0, 0);
+    update_camera(&camera, view_matrix, dist + 4.0, dist, dist, 0, 0, 0);
 
 
     log_fmt("Camera position %f %f %f\n", camera.position.x, camera.position.y, camera.position.z);
@@ -277,7 +282,8 @@ void render_game(State *state) {
 
     if (touch_is_down) {
         float camera_nudge = 10.01f;
-        update_camera(&camera, view_matrix, camera.position.x, camera.position.y, camera.position.z, (touch_x * camera_nudge), (-touch_y * camera_nudge),camera.look_at.z);
+        update_camera(&camera, view_matrix, camera.position.x, camera.position.y, camera.position.z,
+                      (touch_x * camera_nudge), (-touch_y * camera_nudge), camera.look_at.z);
     }
 
     GL_ERR;
@@ -353,18 +359,20 @@ void render_game(State *state) {
 
     m_mat4_identity(model_matrix);
     line_renderer_clear_lines(&line_renderer);
+    line_renderer_push_point(&line_renderer, 0, 0, 0, 1, 0.5);
 
-    line_renderer_push_point(&line_renderer, 0,0,0, 1, 1.1);
-
-    int grid = 10;
-    for (int y = -grid; y < grid; ++y) {
-        for (int x = -grid; x < grid; ++x) {
-            line_renderer_push_point(&line_renderer, x,0,y, 1, 0.1);
-        }
+    for (int i = 1; i < 10; ++i) {
+        line_renderer_push_point(&line_renderer, i, 0, 0, 0, 0.05);
+        line_renderer_push_point(&line_renderer, 0, i, 0, 0, 0.05);
+        line_renderer_push_point(&line_renderer, 0, 0, i, 0, 0.05);
+        line_renderer_push_point(&line_renderer, -i, 0, 0, 0, 0.05);
+        line_renderer_push_point(&line_renderer, 0, -i, 0, 0, 0.05);
+        line_renderer_push_point(&line_renderer, 0, 0, -i, 0, 0.05);
     }
 
-    line_renderer_render(&line_renderer, model_matrix, view_matrix, projection_matrix);
+    line_renderer_push(&line_renderer, 0, 0, 0, 4, 0, 4, 0);
 
+    line_renderer_render(&line_renderer, model_matrix, view_matrix, projection_matrix);
     /*
     glUseProgram(font_shader_program);
     m_mat4_identity(model_matrix);
