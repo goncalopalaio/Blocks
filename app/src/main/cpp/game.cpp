@@ -33,7 +33,7 @@
 
 #include "gp_line_renderer.h"
 
-#define RENDER_CUBE true
+#define RENDER_MODELS true
 
 
 typedef struct {
@@ -118,10 +118,22 @@ float view_matrix[] = M_MAT4_IDENTITY();
 float projection_matrix[] = M_MAT4_IDENTITY();
 float model_matrix[] = M_MAT4_IDENTITY();
 
+// Temporary matrices
+float translation_matrix[] = M_MAT4_IDENTITY();
+float rotation_matrix[] = M_MAT4_IDENTITY();
+float scale_matrix[] = M_MAT4_IDENTITY();
+
+// Models
+SModelData trooper_model;
+SModelData plane_model;
+SModelData sphere_model;
+SModelData duck_model;
 SModelData cube_model;
 
 // Textures
-GLuint uvs_test_texture = -1;
+GLuint trooper_texture = 0;
+GLuint test_texture = 0;
+GLuint duck_texture = 0;
 
 /**
  * M_MATH.H extras
@@ -174,6 +186,36 @@ update_camera(Camera *camera, float view_matrix[], float px, float py, float pz,
             camera->position.z, camera->direction.x, camera->direction.y, camera->direction.z);
 }
 
+GLuint prepare_texture(const char *texture_path, bool flip_on_load) {
+    log_fmt("Loading texture %s\n", texture_path);
+    int width;
+    int height;
+    int channels;
+    stbi_set_flip_vertically_on_load(flip_on_load);
+    unsigned char *pixels = stbi_load(texture_path, &width, &height, &channels, 0);
+    assert(pixels != NULL);
+    log_fmt("Texture w: %d h: %d channels: %d is_null?: %d \n", width, height, channels,
+            pixels == NULL);
+
+    //glEnable(GL_TEXTURE_2D);
+    GLuint texture = 0;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    if (channels == 3) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+    } else {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                     pixels);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    stbi_image_free(pixels);
+
+    return texture;
+}
+
 void init_game(State *state, int w, int h) {
     log_str("init_game");
 
@@ -202,14 +244,27 @@ void init_game(State *state, int w, int h) {
     gl_error("after viewport", __LINE__);
 
     // Load models
-    char *cube = read_entire_file("tri_stormt.obj.smodel", 'r');
-    //char *cube = read_entire_file("cube.obj.smodel", 'r');
-    //char *cube = read_entire_file("plane.obj.smodel", 'r');
+    char *trooper = read_entire_file("tri_stormt.obj.smodel", 'r');
+    trooper_model = parse_smodel_file_as_single_model(trooper);
+
+    char *plane = read_entire_file("plane.obj.smodel", 'r');
+    plane_model = parse_smodel_file_as_single_model(plane);
+
+    char *sphere = read_entire_file("sphere.obj.smodel", 'r');
+    sphere_model = parse_smodel_file_as_single_model(sphere);
+
+    char *cube = read_entire_file("cube.obj.smodel", 'r');
     cube_model = parse_smodel_file_as_single_model(cube);
 
+    char *duck = read_entire_file("duck.obj.smodel", 'r');
+    duck_model = parse_smodel_file_as_single_model(duck);
+
+    //char *cube = read_entire_file("cube.obj.smodel", 'r');
+    //char *cube = read_entire_file("plane.obj.smodel", 'r');
+
     log_fmt("elements_per_vertex: %d vertex_number: %d size: %d has_data: %d",
-            cube_model.elems_per_vertex, cube_model.vertex_number, cube_model.size,
-            cube_model.data != nullptr);
+            trooper_model.elems_per_vertex, trooper_model.vertex_number, trooper_model.size,
+            trooper_model.data != nullptr);
 
     // Scenery positions
 
@@ -228,28 +283,9 @@ void init_game(State *state, int w, int h) {
 
 
     // Load images
-    log_fmt("Loading texture!\n");
-    int width, height, channels;
-    stbi_set_flip_vertically_on_load(true);
-    unsigned char *pixels = stbi_load("tri_stormt_ao.png", &width, &height, &channels, 0);
-    assert(pixels != NULL);
-    log_fmt("Texture w: %d h: %d channels: %d is_null?: %d \n", width, height, channels,
-            pixels == NULL);
-
-    //glEnable(GL_TEXTURE_2D);
-    glGenTextures(1, &uvs_test_texture);
-    glBindTexture(GL_TEXTURE_2D, uvs_test_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    if (channels == 3) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-    } else {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                     pixels);
-    }
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-    stbi_image_free(pixels);
+    trooper_texture = prepare_texture("tri_stormt_ao.png", true);
+    test_texture = prepare_texture("texture_map.png", true);
+    duck_texture = prepare_texture("duck.png", true);
 
     font_data = font_init();
 
@@ -277,6 +313,53 @@ void update_touch_input_game(bool is_down, float in_touch_x, float in_touch_y) {
 void update_sensor_input_game(float in_yaw, float in_pitch, float in_roll) {
 }
 
+void render_model(GLuint shader, GLuint texture, SModelData *model, float model_matrix[],
+                  float view_matrix[],
+                  float projection_matrix[]) {
+    glUseProgram(shader);
+    GL_ERR;
+    // Render cube
+    {
+        glActiveTexture(GL_TEXTURE0);
+        GL_ERR;
+        glBindTexture(GL_TEXTURE_2D, texture);
+        GL_ERR;
+        GLint texture_unit = glGetAttribLocation(shader,
+                                                 "texture_unit");
+        GL_ERR;
+        glUniform1f(texture_unit, 0.0);
+        GL_ERR;
+
+        glUniformMatrix4fv(
+                glGetUniformLocation(shader, "model_matrix"),
+                1,
+                GL_FALSE,
+                model_matrix);
+        glUniformMatrix4fv(
+                glGetUniformLocation(shader, "view_matrix"),
+                1,
+                GL_FALSE,
+                view_matrix);
+        glUniformMatrix4fv(
+                glGetUniformLocation(shader, "projection_matrix"),
+                1,
+                GL_FALSE, projection_matrix);
+
+        GLint position = glGetAttribLocation(shader,
+                                             "vertex_position");
+        GLint uvs = glGetAttribLocation(shader, "vertex_uvs");
+        int bytes_per_float = 4;
+        int stride = bytes_per_float * model->elems_stride;
+        glEnableVertexAttribArray(position);
+        glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, model->data);
+        glEnableVertexAttribArray(uvs);
+        glVertexAttribPointer(uvs, 2, GL_FLOAT, GL_FALSE, stride, model->data + 3);
+        glDrawArrays(GL_TRIANGLES, 0, model->vertex_number);
+    }
+    GL_ERR;
+    glUseProgram(0);
+}
+
 void render_game(State *state) {
     render_tick += 0.01f;
 
@@ -296,8 +379,58 @@ void render_game(State *state) {
     glUseProgram(state->main_shader_program);
     GL_ERR;
 
-    if (RENDER_CUBE) {
+    if (RENDER_MODELS) {
+        // Plane
+        m_mat4_identity(model_matrix);
+        m_mat4_identity(translation_matrix);
+        m_mat4_identity(rotation_matrix);
+        m_mat4_identity(scale_matrix);
 
+        float3 translation = {0.0, 0.0, 0.0};
+        set_float3(&translation, 0, -1.0f, 0.0);
+        m_mat4_translation(translation_matrix, &translation);
+        m_mat4_rotation_axis(rotation_matrix, &Z_AXIS, M_PI_2);
+        m_mat4_mul(model_matrix, translation_matrix, rotation_matrix);
+        float3 scale = {2.0, 2.0, 2.0};
+        m_mat4_scale(scale_matrix, &scale);
+        m_mat4_mul(model_matrix, model_matrix, scale_matrix);
+
+        render_model(state->main_shader_program, trooper_texture, &plane_model,model_matrix, view_matrix, projection_matrix);
+
+        // Plane
+        set_float3(&translation, 0, 4.0f, 0.0);
+        m_mat4_identity(model_matrix);
+        m_mat4_identity(rotation_matrix);
+        m_mat4_identity(scale_matrix);
+        m_mat4_translation(translation_matrix, &translation);
+        m_mat4_rotation_axis(rotation_matrix, &X_AXIS, M_PI + M_PI_2);
+        m_mat4_mul(model_matrix, translation_matrix, rotation_matrix);
+        set_float3(&scale, 2.0, 2.0, 2.0);
+        m_mat4_scale(scale_matrix, &scale);
+        m_mat4_mul(model_matrix, model_matrix, scale_matrix);
+
+        render_model(state->main_shader_program, test_texture, &plane_model,
+                     model_matrix, view_matrix, projection_matrix);
+
+        // Sphere
+        set_float3(&translation, -4.0f, 0.0f, 0.0);
+        m_mat4_identity(model_matrix);
+        m_mat4_translation(model_matrix, &translation);
+        render_model(state->main_shader_program, test_texture, &sphere_model,model_matrix, view_matrix, projection_matrix);
+
+        // Cube
+        set_float3(&translation, 4.0f, 0.0f, 0.0);
+        m_mat4_identity(model_matrix);
+        m_mat4_translation(model_matrix, &translation);
+        render_model(state->main_shader_program, test_texture, &cube_model,model_matrix, view_matrix, projection_matrix);
+
+        // Duck
+        set_float3(&translation, 6.0f, 0.0f, 6.0);
+        m_mat4_identity(model_matrix);
+        m_mat4_translation(model_matrix, &translation);
+        render_model(state->main_shader_program, duck_texture, &duck_model,model_matrix, view_matrix, projection_matrix);
+
+        // Trooper
         float offset_space = 1.8f;
         float gx = 1.0f;
         float gy = 1.0f;
@@ -312,48 +445,10 @@ void render_game(State *state) {
                 m_mat4_rotation_axis(model_matrix, &Y_AXIS, render_tick);
                 m_mat4_translation(model_matrix, &touch_model_trans);
 
-                // Render cube
-                {
-                    glActiveTexture(GL_TEXTURE0);
-                    GL_ERR;
-                    glBindTexture(GL_TEXTURE_2D, uvs_test_texture);
-                    GL_ERR;
-                    GLint texture_unit = glGetAttribLocation(state->main_shader_program,
-                                                             "texture_unit");
-                    GL_ERR;
-                    glUniform1f(texture_unit, 0.0);
-                    GL_ERR;
-
-                    glUniformMatrix4fv(
-                            glGetUniformLocation(state->main_shader_program, "model_matrix"),
-                            1,
-                            GL_FALSE,
-                            model_matrix);
-                    glUniformMatrix4fv(
-                            glGetUniformLocation(state->main_shader_program, "view_matrix"),
-                            1,
-                            GL_FALSE,
-                            view_matrix);
-                    glUniformMatrix4fv(
-                            glGetUniformLocation(state->main_shader_program, "projection_matrix"),
-                            1,
-                            GL_FALSE, projection_matrix);
-
-                    GLint position = glGetAttribLocation(state->main_shader_program,
-                                                         "vertex_position");
-                    GLint uvs = glGetAttribLocation(state->main_shader_program, "vertex_uvs");
-                    int bytes_per_float = 4;
-                    int stride = bytes_per_float * cube_model.elems_stride;
-                    glEnableVertexAttribArray(position);
-                    glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, cube_model.data);
-                    glEnableVertexAttribArray(uvs);
-                    glVertexAttribPointer(uvs, 2, GL_FLOAT, GL_FALSE, stride, cube_model.data + 3);
-                    glDrawArrays(GL_TRIANGLES, 0, cube_model.vertex_number);
-                }
-
+                render_model(state->main_shader_program, trooper_texture, &trooper_model,
+                             model_matrix, view_matrix, projection_matrix);
             }
         }
-
     }
     glUseProgram(0);
 
