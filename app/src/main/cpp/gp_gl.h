@@ -122,4 +122,24 @@ GLuint create_program(const char *pVertexSource, const char *pFragmentSource) {
     return program_obj_id;
 }
 
+GLuint prepare_texture(unsigned char *pixels, int width, int height, int channels) {
+    GLuint texture = 0;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    if (channels == 3) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+    } else if(channels == 4) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    } else {
+        // note: GL_ALPHA is the alternative to GL_RED. Do not forget to read the texture2D().a value in the fragment shader or it won't display.
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, width, height, 0, GL_ALPHA, GL_UNSIGNED_BYTE, pixels);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return texture;
+}
+
 #endif //BLOCKS_GP_GL_H

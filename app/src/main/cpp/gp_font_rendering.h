@@ -34,7 +34,7 @@ GLuint upload_new_texture(int width, int height, int channels, unsigned char* pi
     } else if(channels == 4) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     } else {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, width, height, 0, GL_ALPHA, GL_UNSIGNED_BYTE, pixels);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, width, height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, pixels);
     }
 
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -61,7 +61,7 @@ FontData font_init() {
     } else {
         log_str("font loaded");
     }
-    const uint32_t font_size = 100;
+    const uint32_t font_size = 200;
     const char font_first_char = ' ';
     const int font_char_count = '~' - ' ';
     const int bitmap_width = 512;
@@ -118,7 +118,8 @@ void font_render(FontData d, float initial_x, float initial_y, const char *text,
             q.y0 = -q.y0;
             q.y1 = -q.y1;
 
-            buf = push_textured_quad_scaled_arr(buf, i + 0.0f, 0.0f, i + 1.0f, 1.0f, q.s0, q.t0, q.s1, q.t1, 1.1, 1.1);
+            //buf = push_textured_quad_scaled_arr(buf, i + 0.0f, 0.0f, i + 1.0f, 1.0f, q.s0, q.t0, q.s1, q.t1, 1.1, 1.1);
+            buf = push_textured_quad_scaled_arr(buf, i + 0.0f, 0.0f, i + 1.0f, 1.0f, 0, 0, 1, 1, 1.1, 1.1);
         }
     }
 

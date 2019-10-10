@@ -62,7 +62,8 @@ auto fs_font_source =
         "varying vec2 v_uvs;\n"
         "void main() {\n"
         //"   gl_FragColor = vec4(v_uvs.y, v_uvs.x, 0.0, 1.0);"
-        "  gl_FragColor = texture2D(texture_unit, v_uvs);\n"
+        // "  gl_FragColor = texture2D(texture_unit, v_uvs);\n"
+        "  gl_FragColor = vec4(texture2D(texture_unit, v_uvs).a);\n"
         //"  gl_FragColor = vec4(0.0,1.0,0.0,1.0);\n"
         "}\n";
 
@@ -134,6 +135,7 @@ SModelData cube_model;
 GLuint trooper_texture = 0;
 GLuint test_texture = 0;
 GLuint duck_texture = 0;
+GLuint font_texture = 0;
 
 /**
  * M_MATH.H extras
@@ -194,25 +196,12 @@ GLuint prepare_texture(const char *texture_path, bool flip_on_load) {
     stbi_set_flip_vertically_on_load(flip_on_load);
     unsigned char *pixels = stbi_load(texture_path, &width, &height, &channels, 0);
     assert(pixels != NULL);
-    log_fmt("Texture w: %d h: %d channels: %d is_null?: %d \n", width, height, channels,
+    log_fmt("Texture |%s| w: %d h: %d channels: %d is_null?: %d \n", texture_path, width, height, channels,
             pixels == NULL);
 
     //glEnable(GL_TEXTURE_2D);
-    GLuint texture = 0;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    if (channels == 3) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-    } else {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                     pixels);
-    }
-
-    glBindTexture(GL_TEXTURE_2D, 0);
+    GLuint texture = prepare_texture(pixels, width, height, channels);
     stbi_image_free(pixels);
-
     return texture;
 }
 
@@ -286,6 +275,7 @@ void init_game(State *state, int w, int h) {
     trooper_texture = prepare_texture("tri_stormt_ao.png", true);
     test_texture = prepare_texture("texture_map.png", true);
     duck_texture = prepare_texture("duck.png", true);
+    font_texture = prepare_texture("font.png", true);
 
     font_data = font_init();
 
@@ -475,9 +465,9 @@ void render_game(State *state) {
     {
         glUseProgram(font_shader_program);
 
-        //glActiveTexture(GL_TEXTURE0);
-        //glBindTexture(GL_TEXTURE_2D, font_texture);
-        //GL_ERR;
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, font_texture);
+        GL_ERR;
 
         float3 translation;
         float3 scale;
