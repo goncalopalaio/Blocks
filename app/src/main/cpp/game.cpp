@@ -62,8 +62,8 @@ auto fs_font_source =
         "varying vec2 v_uvs;\n"
         "void main() {\n"
         //"   gl_FragColor = vec4(v_uvs.y, v_uvs.x, 0.0, 1.0);"
-        //"  gl_FragColor = texture2D(texture_unit, v_uvs);\n"
-        "  gl_FragColor = vec4(0.0,1.0,0.0,1.0);\n"
+        "  gl_FragColor = texture2D(texture_unit, v_uvs);\n"
+        //"  gl_FragColor = vec4(0.0,1.0,0.0,1.0);\n"
         "}\n";
 
 auto vs_textured_source =
@@ -391,11 +391,12 @@ void render_game(State *state) {
         m_mat4_translation(translation_matrix, &translation);
         m_mat4_rotation_axis(rotation_matrix, &Z_AXIS, M_PI_2);
         m_mat4_mul(model_matrix, translation_matrix, rotation_matrix);
-        float3 scale = {2.0, 2.0, 2.0};
+        float3 scale = {0.5, 0.5, 0.5};
         m_mat4_scale(scale_matrix, &scale);
         m_mat4_mul(model_matrix, model_matrix, scale_matrix);
 
-        render_model(state->main_shader_program, trooper_texture, &plane_model,model_matrix, view_matrix, projection_matrix);
+        render_model(state->main_shader_program, trooper_texture, &plane_model, model_matrix,
+                     view_matrix, projection_matrix);
 
         // Plane
         set_float3(&translation, 0, 4.0f, 0.0);
@@ -405,7 +406,7 @@ void render_game(State *state) {
         m_mat4_translation(translation_matrix, &translation);
         m_mat4_rotation_axis(rotation_matrix, &X_AXIS, M_PI + M_PI_2);
         m_mat4_mul(model_matrix, translation_matrix, rotation_matrix);
-        set_float3(&scale, 2.0, 2.0, 2.0);
+        set_float3(&scale, 0.5, 0.5, 0.5);
         m_mat4_scale(scale_matrix, &scale);
         m_mat4_mul(model_matrix, model_matrix, scale_matrix);
 
@@ -416,19 +417,22 @@ void render_game(State *state) {
         set_float3(&translation, -4.0f, 0.0f, 0.0);
         m_mat4_identity(model_matrix);
         m_mat4_translation(model_matrix, &translation);
-        render_model(state->main_shader_program, test_texture, &sphere_model,model_matrix, view_matrix, projection_matrix);
+        render_model(state->main_shader_program, test_texture, &sphere_model, model_matrix,
+                     view_matrix, projection_matrix);
 
         // Cube
         set_float3(&translation, 4.0f, 0.0f, 0.0);
         m_mat4_identity(model_matrix);
         m_mat4_translation(model_matrix, &translation);
-        render_model(state->main_shader_program, test_texture, &cube_model,model_matrix, view_matrix, projection_matrix);
+        render_model(state->main_shader_program, test_texture, &cube_model, model_matrix,
+                     view_matrix, projection_matrix);
 
         // Duck
         set_float3(&translation, 6.0f, 0.0f, 6.0);
         m_mat4_identity(model_matrix);
         m_mat4_translation(model_matrix, &translation);
-        render_model(state->main_shader_program, duck_texture, &duck_model,model_matrix, view_matrix, projection_matrix);
+        render_model(state->main_shader_program, duck_texture, &duck_model, model_matrix,
+                     view_matrix, projection_matrix);
 
         // Trooper
         float offset_space = 1.8f;
@@ -464,18 +468,37 @@ void render_game(State *state) {
         line_renderer_push_point(&line_renderer, 0, -i, 0, 0, 0.05);
         line_renderer_push_point(&line_renderer, 0, 0, -i, 0, 0.05);
     }
-
     line_renderer_push(&line_renderer, 0, 0, 0, 4, 0, 4, 0);
 
     line_renderer_render(&line_renderer, model_matrix, view_matrix, projection_matrix);
-    /*
-    glUseProgram(font_shader_program);
-    m_mat4_identity(model_matrix);
-    float3 scale;
-    //set_float3(&scale, 0.1, 0.1, 1.0);
-    //m_mat4_scale(model_matrix, &scale);
-    font_render(font_data, -10,-10, "Mds", font_shader_program, model_matrix, view_matrix, projection_matrix);
-    */
+
+    {
+        glUseProgram(font_shader_program);
+
+        //glActiveTexture(GL_TEXTURE0);
+        //glBindTexture(GL_TEXTURE_2D, font_texture);
+        //GL_ERR;
+
+        float3 translation;
+        float3 scale;
+
+        set_float3(&translation, 0, 0.0f, 0.0);
+        m_mat4_identity(model_matrix);
+        m_mat4_identity(rotation_matrix);
+        m_mat4_identity(scale_matrix);
+        m_mat4_translation(translation_matrix, &translation);
+        m_mat4_rotation_axis(rotation_matrix, &Y_AXIS, 2 * M_PI);
+        m_mat4_mul(model_matrix, translation_matrix, rotation_matrix);
+        set_float3(&scale, 1.5, 1.5, 1.5);
+        m_mat4_scale(scale_matrix, &scale);
+        m_mat4_mul(model_matrix, model_matrix, scale_matrix);
+
+        m_mat4_scale(model_matrix, &scale);
+        font_render(font_data, 0, 0, "Mds", font_shader_program, model_matrix, view_matrix,
+                    projection_matrix);
+
+    }
+
     glUseProgram(0);
 
     GL_ERR;

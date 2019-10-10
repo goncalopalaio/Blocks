@@ -6,54 +6,7 @@
 #define BLOCKS_GP_FONT_RENDERING_H
 
 #include <cstdio>
-/*
 
-typedef struct {
-    float *vertex_data;
-    size_t vertex_data_size;
-
-    uint32_t cur_text_length;
-    uint32_t max_text_length;
-
-    uint32_t elems_per_vertex;
-} TextData;
-
-typedef struct {
-    GLuint font_texture;
-    stbtt_packedchar *font_char_info;
-
-    // @todo review types throughout the project
-    uint32_t font_size;
-    int font_ascent;
-    uint32_t font_first_char;
-    uint32_t font_char_count;
-    uint32_t font_atlas_width;
-    uint32_t font_atlas_height;
-    uint32_t font_oversample_x;
-    uint32_t font_oversample_y;
-} LoadedFont;
-
-void log_loaded_font(LoadedFont *f) {
-    log_fmt("LoadedFont - font_texture: %d", f->font_texture);
-    log_fmt("LoadedFont - *font_char_info: NotNull? %d", (f->font_char_info != NULL));
-    log_fmt("LoadedFont - font_size: %d", f->font_size);
-    log_fmt("LoadedFont - font_ascent: %d", f->font_ascent);
-    log_fmt("LoadedFont - font_first_char: %d", f->font_first_char);
-    log_fmt("LoadedFont - font_char_count: %d", f->font_char_count);
-    log_fmt("LoadedFont - font_atlas_width: %d", f->font_atlas_width);
-    log_fmt("LoadedFont - font_atlas_height: %d", f->font_atlas_height);
-    log_fmt("LoadedFont - font_oversample_x: %d", f->font_oversample_x);
-    log_fmt("LoadedFont - font_oversample_y: %d", f->font_oversample_y);
-}
-
-void log_text_data(TextData *d) {
-    log_fmt("TextData - *vertex_data: NotNull? %d", (d->vertex_data != NULL));
-    log_fmt("TextData - vertex_data_size: %d", d->vertex_data_size);
-    log_fmt("TextData - cur_text_length: %d", d->cur_text_length);
-    log_fmt("TextData - max_text_length: %d", d->max_text_length);
-    log_fmt("TextData - elems_per_vertex: %d", d->elems_per_vertex);
-}
-*/
 typedef struct {
     GLuint texture;
     float *vertex_data;
@@ -157,7 +110,7 @@ void font_render(FontData d, float initial_x, float initial_y, const char *text,
     for (int i = 0; i < len; i++) {
         char character = text[i];
         int index_to_char = character - d.font_first_char;
-        log_fmt("rendering %c x: %f y: %f", character, x, y);
+        // log_fmt("%d/%d rendering %c x: %f y: %f", i, len, character, x, y);
 
         stbtt_GetBakedQuad(d.font_char_data, d.font_bitmap_width, d.font_bitmap_height, index_to_char, &x,&y, &q, 1);
         {
@@ -165,12 +118,15 @@ void font_render(FontData d, float initial_x, float initial_y, const char *text,
             q.y0 = -q.y0;
             q.y1 = -q.y1;
 
-            buf = push_textured_quad_scaled_arr(buf, q.x0, q.y0, q.x1, q.y1, q.s0, q.t0, q.s1, q.t1, 1.1, 1.1);
+            buf = push_textured_quad_scaled_arr(buf, i + 0.0f, 0.0f, i + 1.0f, 1.0f, q.s0, q.t0, q.s1, q.t1, 1.1, 1.1);
         }
     }
 
     // Render
     {
+        //glActiveTexture(GL_TEXTURE0);
+        //glBindTexture(GL_TEXTURE_2D, d.texture);
+        //GL_ERR;
 
         GLint position = glGetAttribLocation(shader,
                                              "vertex_position");
@@ -206,21 +162,11 @@ void font_render(FontData d, float initial_x, float initial_y, const char *text,
         int stride = bytes_per_float * 5;
         glEnableVertexAttribArray(position);
         glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, d.vertex_data);
+        GL_ERR;
         glEnableVertexAttribArray(uvs);
         glVertexAttribPointer(uvs, 2, GL_FLOAT, GL_FALSE, stride, d.vertex_data + 3);
-        glDrawArrays(GL_TRIANGLES, 0, len * 6);
-
-        /*glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, d.texture);
-        GL_ERR;
-        int bytes_per_float = 4;
-        int stride = bytes_per_float * (4);
-        gl_error("Before vertex_arrays", __LINE__);
-        glEnableVertexAttribArray(position);
-        GL_ERR;
-        glVertexAttribPointer(position, 4, GL_FLOAT, GL_FALSE, stride, d.vertex_data);
-        GL_ERR;
-        glDrawArrays(GL_TRIANGLES, 0, d.max_text_length * 6);*/
+        //glDrawArrays(GL_TRIANGLES, 0, len * 6);
+        glDrawArrays(GL_TRIANGLES, 0, strlen(text) * 6);
         GL_ERR;
     }
 

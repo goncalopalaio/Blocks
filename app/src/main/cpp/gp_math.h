@@ -7,6 +7,8 @@
 
 #include "gp_platform.h"
 
+// @TODO Nothing is 'Math' here, move to other place
+
 void set_float3(float3 *v, float x, float y, float z) {
     v->x = x;
     v->y = y;
@@ -114,6 +116,5 @@ push_triangle_v3v2_arr(float *dest, float3 *va, float2 *na, float3 *vb, float2 *
 
     return dest;
 }
-
 
 #endif //BLOCKS_GP_MATH_H

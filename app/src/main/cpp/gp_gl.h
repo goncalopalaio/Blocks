@@ -17,25 +17,26 @@ static void print_gl_string(const char *name, GLenum s) {
 void gl_error(const char *file, int line) {
     bool has_errors = false;
     for (GLint error = glGetError(); error; error = glGetError()) {
+        log_fmt("\t**********************************************************************");
         log_fmt("\tGL_ERROR: file:%s:%d -- Hex: 0x%x Dec: %d)\n", file, line, error, error);
         switch (error) {
             case GL_INVALID_ENUM:
-                log_fmt("\tINVALID_ENUM");
+                log_fmt("\tINVALID_ENUM ***************************************************");
                 break;
             case GL_INVALID_VALUE:
-                log_fmt("\tINVALID_VALUE");
+                log_fmt("\tINVALID_VALUE ***************************************************");
                 break;
             case GL_INVALID_OPERATION:
-                log_fmt("\tINVALID_OPERATION");
+                log_fmt("\tINVALID_OPERATION ***************************************************");
                 break;
             case GL_OUT_OF_MEMORY:
-                log_fmt("\tOUT_OF_MEMORY");
+                log_fmt("\tOUT_OF_MEMORY ***************************************************");
                 break;
             case GL_INVALID_FRAMEBUFFER_OPERATION:
-                log_fmt("\tINVALID_FRAMEBUFFER_OPERATION");
+                log_fmt("\tINVALID_FRAMEBUFFER_OPERATION ***************************************************");
                 break;
             default:
-                log_fmt("\t__UNEXPECTED_VALUE__)");
+                log_fmt("\t__UNEXPECTED_VALUE__) ***************************************************");
         }
         has_errors = true;
     }
