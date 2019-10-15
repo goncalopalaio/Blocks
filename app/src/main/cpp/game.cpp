@@ -1,9 +1,6 @@
 //
 // Created by Gonçalo Palaio on 2019-09-05.
 //
-
-
-
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 
@@ -36,6 +33,18 @@
 #define RENDER_MODELS true
 
 
+// TODO LIST
+
+// [] Make text rendering usable by allowing it to be presented at any position.
+// [] Implement mouse picking -- Render 3d object in world below the finger position.
+// [] Implement multiple cameras. Free/FlyOver, Fixed
+// [] Implement a simple button widget for debugging purposes
+// [] Implement a simple button widget for debugging purposes
+// [] Implement a simple slider widget for debugging purposes
+// [] Implement a simple checkbox widget for debugging purposes
+// [] Implement shader hot reloading. Use a default shader as a fallback.
+// [] Integrate physics engine (small example just to see how well it works)
+
 typedef struct {
     float3 position;
     float3 direction;
@@ -63,7 +72,12 @@ auto fs_font_source =
         "void main() {\n"
         //"   gl_FragColor = vec4(v_uvs.y, v_uvs.x, 0.0, 1.0);"
         // "  gl_FragColor = texture2D(texture_unit, v_uvs);\n"
-        "  gl_FragColor = vec4(texture2D(texture_unit, v_uvs).a);\n"
+        " float c = texture2D(texture_unit, v_uvs).a;\n"
+        "if (c < 0.1) {"
+        "   gl_FragColor = vec4(0.1,0.,0.0, 0.0);\n"
+        "} else {"
+        "   gl_FragColor = vec4(c);\n"
+        "}"
         //"  gl_FragColor = vec4(0.0,1.0,0.0,1.0);\n"
         "}\n";
 
@@ -105,6 +119,7 @@ float touch_x = 0.0f;
 float touch_y = 0.0f;
 bool touch_is_down = false;
 float3 touch_model_trans = {0.0, 0.0, 0.0};
+float3 touch_ray_world;
 
 // Fonts
 GLuint font_shader_program;
@@ -117,6 +132,10 @@ LineRenderer line_renderer;
 Camera camera;
 float view_matrix[] = M_MAT4_IDENTITY();
 float projection_matrix[] = M_MAT4_IDENTITY();
+
+float inv_projection_matrix[] = M_MAT4_IDENTITY();
+float inv_view_matrix[] = M_MAT4_IDENTITY();
+
 float model_matrix[] = M_MAT4_IDENTITY();
 
 // Temporary matrices
@@ -135,7 +154,6 @@ SModelData cube_model;
 GLuint trooper_texture = 0;
 GLuint test_texture = 0;
 GLuint duck_texture = 0;
-GLuint font_texture = 0;
 
 /**
  * M_MATH.H extras
@@ -183,9 +201,12 @@ update_camera(Camera *camera, float view_matrix[], float px, float py, float pz,
                camera->look_at.z - camera->position.z);
     set_float3(&camera->up, 0, 1, 0);
     m_mat4_lookat(view_matrix, &camera->position, &camera->direction, &camera->up);
+    m_mat4_inverse(inv_view_matrix, view_matrix);
 
     log_fmt("Camera - p: %f, %f, %f d: %f, %f, %f", camera->position.x, camera->position.y,
             camera->position.z, camera->direction.x, camera->direction.y, camera->direction.z);
+
+
 }
 
 GLuint prepare_texture(const char *texture_path, bool flip_on_load) {
@@ -196,7 +217,8 @@ GLuint prepare_texture(const char *texture_path, bool flip_on_load) {
     stbi_set_flip_vertically_on_load(flip_on_load);
     unsigned char *pixels = stbi_load(texture_path, &width, &height, &channels, 0);
     assert(pixels != NULL);
-    log_fmt("Texture |%s| w: %d h: %d channels: %d is_null?: %d \n", texture_path, width, height, channels,
+    log_fmt("Texture |%s| w: %d h: %d channels: %d is_null?: %d \n", texture_path, width, height,
+            channels,
             pixels == NULL);
 
     //glEnable(GL_TEXTURE_2D);
@@ -259,6 +281,7 @@ void init_game(State *state, int w, int h) {
 
     float aspect = w / (float) h;
     m_mat4_perspective(projection_matrix, 13.0, aspect, 0.1, 9999.0);
+    m_mat4_inverse(inv_projection_matrix, projection_matrix);
 
     float dist = 10;
     //update_camera(&camera, view_matrix, dist, 13.000000, dist, 0, 0, 0);
@@ -275,7 +298,6 @@ void init_game(State *state, int w, int h) {
     trooper_texture = prepare_texture("tri_stormt_ao.png", true);
     test_texture = prepare_texture("texture_map.png", true);
     duck_texture = prepare_texture("duck.png", true);
-    font_texture = prepare_texture("font.png", true);
 
     font_data = font_init();
 
@@ -284,11 +306,36 @@ void init_game(State *state, int w, int h) {
     gl_error("end init_game", __LINE__);
 }
 
+void transform_touch_screen_to_world(float3 *norm_ray_world, float tx, float ty) {
+    // Touch positions must be already screen space(viewport coordinates) - normalized to screen width and in the range of -1,1 where 0,0 is the center of the screen
+    // ((2.0f * x) / w) - 1.0f
+
+    // screen space (viewport coordinates)
+    float tz = 1.0f;
+
+    // normalised device space
+    float3 ray_nds = {tx, ty, tz};
+    // clip space
+    float4 ray_clip = {ray_nds.x, ray_nds.y, -1.0f, 1.0f};
+    // eye space
+    float4 ray_eye;
+
+    m_mat4_transform4(&ray_eye, inv_projection_matrix, &ray_clip);
+    set_float4(&ray_eye, ray_eye.x, ray_eye.y, -1.0, 0.0);
+    // world space
+    float4 ray_wor;
+    m_mat4_transform4(&ray_wor, inv_view_matrix, &ray_eye);
+
+    set_float3(norm_ray_world, ray_wor.x, ray_wor.y, ray_wor.z);
+    f3_ip_normalize(norm_ray_world);
+}
+
 void update_touch_input_game(bool is_down, float in_touch_x, float in_touch_y) {
     touch_is_down = is_down;
     if (!is_down) {
         touch_x = 0;
         touch_y = 0;
+        set_float3(&touch_ray_world, 0.0,0.0,0.0);
         return;
     }
 
@@ -297,7 +344,10 @@ void update_touch_input_game(bool is_down, float in_touch_x, float in_touch_y) {
 
     touch_x = -1.0f + touch_x * 2.0f;
     touch_y = -1.0f + touch_y * 2.0f;
-    log_fmt("touch_x: %f touch_y: %f", touch_x, touch_y);
+
+    transform_touch_screen_to_world(&touch_ray_world, touch_x, touch_y);
+    log_fmt("touch_x: %f touch_y: %f --- ray_world: %f %f %f", touch_x, touch_y, touch_ray_world.x,
+            touch_ray_world.y, touch_ray_world.z);
 }
 
 void update_sensor_input_game(float in_yaw, float in_pitch, float in_roll) {
@@ -348,6 +398,12 @@ void render_model(GLuint shader, GLuint texture, SModelData *model, float model_
     }
     GL_ERR;
     glUseProgram(0);
+
+    glDepthMask(GL_TRUE);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
 void render_game(State *state) {
@@ -355,8 +411,15 @@ void render_game(State *state) {
 
     if (touch_is_down) {
         float camera_nudge = 10.01f;
-        update_camera(&camera, view_matrix, camera.position.x, camera.position.y, camera.position.z,
+        update_camera(&camera, view_matrix, camera.position.x, camera.position.y,
+                      camera.position.z,
                       (touch_x * camera_nudge), (-touch_y * camera_nudge), camera.look_at.z);
+    } else {
+        /*float camera_nudge = 10.01f;
+        float xx = 10 * cos(render_tick);
+        float zz = 10 * sin(render_tick);
+        update_camera(&camera, view_matrix, xx, camera.position.y, zz,
+                      (touch_x * camera_nudge), (-touch_y * camera_nudge), camera.look_at.z);*/
     }
 
     GL_ERR;
@@ -411,7 +474,7 @@ void render_game(State *state) {
                      view_matrix, projection_matrix);
 
         // Cube
-        set_float3(&translation, 4.0f, 0.0f, 0.0);
+        set_float3(&translation, touch_ray_world.z, touch_ray_world.y, touch_ray_world.z);
         m_mat4_identity(model_matrix);
         m_mat4_translation(model_matrix, &translation);
         render_model(state->main_shader_program, test_texture, &cube_model, model_matrix,
@@ -463,30 +526,21 @@ void render_game(State *state) {
     line_renderer_render(&line_renderer, model_matrix, view_matrix, projection_matrix);
 
     {
+        glDisable(GL_CULL_FACE);
         glUseProgram(font_shader_program);
-
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, font_texture);
-        GL_ERR;
 
         float3 translation;
         float3 scale;
 
-        set_float3(&translation, 0, 0.0f, 0.0);
         m_mat4_identity(model_matrix);
         m_mat4_identity(rotation_matrix);
-        m_mat4_identity(scale_matrix);
-        m_mat4_translation(translation_matrix, &translation);
-        m_mat4_rotation_axis(rotation_matrix, &Y_AXIS, 2 * M_PI);
-        m_mat4_mul(model_matrix, translation_matrix, rotation_matrix);
-        set_float3(&scale, 1.5, 1.5, 1.5);
-        m_mat4_scale(scale_matrix, &scale);
-        m_mat4_mul(model_matrix, model_matrix, scale_matrix);
-
-        m_mat4_scale(model_matrix, &scale);
-        font_render(font_data, 0, 0, "Mds", font_shader_program, model_matrix, view_matrix,
+        m_mat4_rotation_axis(rotation_matrix, &Y_AXIS, render_tick * 2.0);
+        m_mat4_mul(model_matrix, model_matrix, rotation_matrix);
+        char buf[500];
+        sprintf(buf, "Hi::%f", render_tick);
+        font_render(font_data, 0, 0, buf, font_shader_program, model_matrix, view_matrix,
                     projection_matrix);
-
+        glEnable(GL_CULL_FACE);
     }
 
     glUseProgram(0);

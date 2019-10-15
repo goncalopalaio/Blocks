@@ -7,12 +7,33 @@
 
 #include "gp_platform.h"
 
-// @TODO Nothing is 'Math' here, move to other place
+float f3_length(float3 *src) {
+    return sqrtf((src)->x * (src)->x + (src)->y * (src)->y + (src)->z * (src)->z);
+}
+
+void f3_ip_normalize(float3 *src) {
+    float l = f3_length(src);
+    if (l > 0) {
+        l = 1.0f / l;
+        src->x = src->x * l;
+        src->y = src->y * l;
+        src->z = src->z * l;
+    } else {
+        src->x = src->y = src->z = 0.0f;
+    }
+}
 
 void set_float3(float3 *v, float x, float y, float z) {
     v->x = x;
     v->y = y;
     v->z = z;
+}
+
+void set_float4(float4 *v, float x, float y, float z, float w) {
+    v->x = x;
+    v->y = y;
+    v->z = z;
+    v->w = w;
 }
 
 void set_float2(float2 *v, float x, float y) {
@@ -57,7 +78,7 @@ inline float *push_v5_arr(float *v, float x, float y, float z, float s, float t)
     v[2] = z;
     v[3] = s;
     v[4] = t;
-    printf("push_v5_arr: %f, %f, %f, %f, %f\n",  x, y, z, s, t);
+    printf("push_v5_arr: %f, %f, %f, %f, %f\n", x, y, z, s, t);
     return v + 5;
 }
 
@@ -76,7 +97,8 @@ inline float *push_v1_arr(float *v, float x) {
     return v + 1;
 }
 
-float* push_textured_quad_arr(float*v, float x0, float y0, float x1, float y1, float s0, float t0, float s1, float t1) {
+float *push_textured_quad_arr(float *v, float x0, float y0, float x1, float y1, float s0, float t0,
+                              float s1, float t1) {
     // quad 1 2 3 4
     // -->
     // triangle 1 2 3
@@ -98,23 +120,11 @@ float* push_textured_quad_arr(float*v, float x0, float y0, float x1, float y1, f
     return v;
 }
 
-float* push_textured_quad_scaled_arr(float*v, float x0, float y0, float x1, float y1, float s0, float t0, float s1, float t1, float scale_x, float scale_y) {
-    return push_textured_quad_arr(v, x0 * scale_x, y0 * scale_y, x1 * scale_x, y1 * scale_y, s0, t0, s1, t1);
-}
-
-inline float *
-push_triangle_v3v2_arr(float *dest, float3 *va, float2 *na, float3 *vb, float2 *nb, float3 *vc,
-                       float2 *nc) {
-    dest = push_v3_arr(dest, va->x, va->y, va->z);
-    dest = push_v2_arr(dest, na->x, na->y);
-
-    dest = push_v3_arr(dest, vb->x, vb->y, vb->z);
-    dest = push_v2_arr(dest, nb->x, nb->y);
-
-    dest = push_v3_arr(dest, vc->x, vc->y, vc->z);
-    dest = push_v2_arr(dest, nc->x, nc->y);
-
-    return dest;
+float *
+push_textured_quad_scaled_arr(float *v, float x0, float y0, float x1, float y1, float s0, float t0,
+                              float s1, float t1, float scale_x, float scale_y) {
+    return push_textured_quad_arr(v, x0 * scale_x, y0 * scale_y, x1 * scale_x, y1 * scale_y, s0, t0,
+                                  s1, t1);
 }
 
 #endif //BLOCKS_GP_MATH_H

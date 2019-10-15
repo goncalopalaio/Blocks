@@ -17,7 +17,6 @@ static void print_gl_string(const char *name, GLenum s) {
 void gl_error(const char *file, int line) {
     bool has_errors = false;
     for (GLint error = glGetError(); error; error = glGetError()) {
-        log_fmt("\t**********************************************************************");
         log_fmt("\tGL_ERROR: file:%s:%d -- Hex: 0x%x Dec: %d)\n", file, line, error, error);
         switch (error) {
             case GL_INVALID_ENUM:
@@ -39,6 +38,13 @@ void gl_error(const char *file, int line) {
                 log_fmt("\t__UNEXPECTED_VALUE__) ***************************************************");
         }
         has_errors = true;
+    }
+    if (has_errors) {
+        log_fmt("\t**********************************************************************");
+        log_fmt("\t**********************************************************************");
+        log_fmt("\t**********************************************************************");
+        log_fmt("\t**********************************************************************");
+        log_fmt("\t**********************************************************************");
     }
     assert(!has_errors);
 }
@@ -131,11 +137,13 @@ GLuint prepare_texture(unsigned char *pixels, int width, int height, int channel
 
     if (channels == 3) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-    } else if(channels == 4) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    } else if (channels == 4) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                     pixels);
     } else {
         // note: GL_ALPHA is the alternative to GL_RED. Do not forget to read the texture2D().a value in the fragment shader or it won't display.
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, width, height, 0, GL_ALPHA, GL_UNSIGNED_BYTE, pixels);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, width, height, 0, GL_ALPHA, GL_UNSIGNED_BYTE,
+                     pixels);
     }
 
     glBindTexture(GL_TEXTURE_2D, 0);

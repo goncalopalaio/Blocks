@@ -20,28 +20,6 @@ typedef struct {
     int font_first_char;
 } FontData;
 
-GLuint upload_new_texture(int width, int height, int channels, unsigned char* pixels) {
-    GLuint tex;
-
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    if (channels == 3) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-    } else if(channels == 4) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-    } else {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, width, height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, pixels);
-    }
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    return tex;
-}
-
 FontData font_init() {
     FontData result;
     result.texture = 0;
@@ -61,7 +39,7 @@ FontData font_init() {
     } else {
         log_str("font loaded");
     }
-    const uint32_t font_size = 200;
+    const uint32_t font_size = 50;
     const char font_first_char = ' ';
     const int font_char_count = '~' - ' ';
     const int bitmap_width = 512;
@@ -77,7 +55,7 @@ FontData font_init() {
 
     stbtt_BakeFontBitmap(font_file,0, font_size, bitmap, bitmap_width, bitmap_height, font_first_char, font_char_count, font_char_data);
 
-    GLuint font_texture = upload_new_texture(bitmap_width, bitmap_height, 1, bitmap);
+    GLuint font_texture = prepare_texture(bitmap, bitmap_width, bitmap_height, 1);
 
     // Cleanup
     free(bitmap);
@@ -117,17 +95,16 @@ void font_render(FontData d, float initial_x, float initial_y, const char *text,
             // invert the y coordinates since the texture is up side down.
             q.y0 = -q.y0;
             q.y1 = -q.y1;
-
-            //buf = push_textured_quad_scaled_arr(buf, i + 0.0f, 0.0f, i + 1.0f, 1.0f, q.s0, q.t0, q.s1, q.t1, 1.1, 1.1);
-            buf = push_textured_quad_scaled_arr(buf, i + 0.0f, 0.0f, i + 1.0f, 1.0f, 0, 0, 1, 1, 1.1, 1.1);
+             buf = push_textured_quad_scaled_arr(buf, q.x0, q.y0, q.x1, q.y1, q.s0, q.t0, q.s1, q.t1, 0.01, 0.01);
+            //buf = push_textured_quad_scaled_arr(buf, i + 0.0f, 0.0f, i + 1.0f, -1.0f, q.s0, q.t0, q.s1, q.t1, 1.1, 1.1);
         }
     }
 
     // Render
     {
-        //glActiveTexture(GL_TEXTURE0);
-        //glBindTexture(GL_TEXTURE_2D, d.texture);
-        //GL_ERR;
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, d.texture);
+        GL_ERR;
 
         GLint position = glGetAttribLocation(shader,
                                              "vertex_position");
